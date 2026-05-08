@@ -5,17 +5,18 @@ import { gitHooksDir } from "../paths.js";
 
 export const QUORUM_HOOK_MARKER = "# quorum-managed";
 
-const POST_REWRITE_STUB = `#!/bin/sh
+const POST_REWRITE_HOOK = `#!/bin/sh
 ${QUORUM_HOOK_MARKER}
-# Quorum post-rewrite hook (stub). Full wiring is completed when reconcile + hooks ship.
-exit 0
+# Quorum post-rewrite: record rewrite manifests on the shadow branch after rebase/amend.
+command -v quorum >/dev/null 2>&1 || exit 0
+quorum internal post-rewrite "$@" || exit 0
 `;
 
 function postRewritePath(gitRoot: string): string {
   return join(gitHooksDir(gitRoot), "post-rewrite");
 }
 
-/** Install stub `post-rewrite` if missing or Quorum-owned; skip if a non-Quorum hook exists. */
+/** Install Quorum `post-rewrite` if missing or Quorum-owned; skip if a non-Quorum hook exists. */
 export function installPostRewriteStub(gitRoot: string): { skipped: boolean; reason?: string } {
   const path = postRewritePath(gitRoot);
   let existing = "";
@@ -30,7 +31,7 @@ export function installPostRewriteStub(gitRoot: string): { skipped: boolean; rea
       reason: `${path} already exists and is not Quorum-managed; leaving it unchanged.`,
     };
   }
-  writeFileSync(path, POST_REWRITE_STUB, "utf-8");
+  writeFileSync(path, POST_REWRITE_HOOK, "utf-8");
   chmodSync(path, 0o755);
   return { skipped: false };
 }

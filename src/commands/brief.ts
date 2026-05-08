@@ -1,9 +1,14 @@
+import { execFileSync } from "node:child_process";
 import { relative, resolve } from "node:path";
 import { assembleBrief, normalizeRepoPath } from "../brief/assemble.js";
 import { trackedDiffPathsVsHead } from "../brief/target-paths.js";
 import { loadMergedConfig } from "../config/load.js";
 import { ConfigError } from "../config/validate.js";
-import { loadSessionCheckpointsFromShadow } from "../shadow/read-checkpoints.js";
+import {
+  filterSessionCheckpointsActiveAtHead,
+  loadRewriteManifestsFromShadow,
+  loadSessionCheckpointsFromShadow,
+} from "../shadow/read-checkpoints.js";
 
 function eprint(msg: string): void {
   process.stderr.write(msg.endsWith("\n") ? msg : `${msg}\n`);
@@ -61,7 +66,13 @@ export function runBrief(gitRoot: string, argv: string[]): void {
     process.exit(1);
   }
 
-  const checkpoints = loadSessionCheckpointsFromShadow(gitRoot, merged.shadow_branch);
+  const headSha = execFileSync("git", ["rev-parse", "HEAD"], {
+    cwd: gitRoot,
+    encoding: "utf-8",
+  }).trim();
+  const allSessions = loadSessionCheckpointsFromShadow(gitRoot, merged.shadow_branch);
+  const manifests = loadRewriteManifestsFromShadow(gitRoot, merged.shadow_branch);
+  const checkpoints = filterSessionCheckpointsActiveAtHead(gitRoot, headSha, allSessions, manifests);
   const targetPaths =
     parsed.paths.length > 0 ? resolveTargetPathsToRepoRelative(gitRoot, parsed.paths) : trackedDiffPathsVsHead(gitRoot);
 
@@ -71,6 +82,7 @@ export function runBrief(gitRoot: string, argv: string[]): void {
     checkpoints,
     nominalTokenBudget: nominal,
     nowMs: Date.now(),
+    shadowSessionCount: allSessions.length,
   });
 
   if (stderrOverflow) {

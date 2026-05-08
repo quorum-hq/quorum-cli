@@ -8,7 +8,9 @@ import { runCheckpoint } from "./commands/checkpoint.js";
 import { runDisable } from "./commands/disable.js";
 import { runInit } from "./commands/init.js";
 import { runInstall } from "./commands/install.js";
+import { runInternal } from "./commands/internal.js";
 import { runPin, runPinsList, runUnpin } from "./commands/pins.js";
+import { runReconcile } from "./commands/reconcile.js";
 import { runRetry } from "./commands/retry.js";
 import { ConfigError } from "./config/validate.js";
 
@@ -48,6 +50,7 @@ function usage(): void {
       "       quorum disable\n" +
       "       quorum checkpoint --agent <id> <transcript-file>\n" +
       "       quorum retry\n" +
+      "       quorum reconcile --landing <sha> [--checkpoint <id> ...] [--pr <n>]\n" +
       "       quorum brief [--tokens N] [path...]\n" +
       "       quorum pin <checkpoint-id> <decision-id>\n" +
       "       quorum unpin <checkpoint-id> <decision-id>\n" +
@@ -95,6 +98,12 @@ async function main(): Promise<void> {
         return;
       case "retry":
         await runRetry(gitRoot);
+        return;
+      case "reconcile":
+        runReconcile(gitRoot, argv.slice(1));
+        return;
+      case "internal":
+        runInternal(gitRoot, argv.slice(1));
         return;
       case "brief":
         runBrief(gitRoot, argv.slice(1));

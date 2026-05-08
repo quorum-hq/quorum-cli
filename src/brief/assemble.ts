@@ -51,10 +51,19 @@ export function assembleBrief(input: {
   checkpoints: SessionCheckpoint[];
   nominalTokenBudget: number;
   nowMs: number;
+  /** When provided, refines the empty-checkpoint message if sessions exist on shadow but none apply to HEAD. */
+  shadowSessionCount?: number;
 }): { body: string; stderrOverflow: string | null } {
   const targetSet = new Set(input.targetPaths.map(normalizeRepoPath).filter((p) => p.length > 0));
 
   if (input.checkpoints.length === 0) {
+    if (input.shadowSessionCount !== undefined && input.shadowSessionCount > 0) {
+      return {
+        body:
+          "No prior context for the current HEAD (no reachable session checkpoints for this commit; if you rebased or amended, run `quorum reconcile` or keep Quorum post-rewrite hooks enabled).\n",
+        stderrOverflow: null,
+      };
+    }
     return { body: "No prior context in the shadow store yet.\n", stderrOverflow: null };
   }
   if (targetSet.size === 0) {
