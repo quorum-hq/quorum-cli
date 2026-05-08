@@ -1,0 +1,21 @@
+{
+  "name": "quorum-cli",
+  "version": "0.1.0",
+  "description": "Quorum CLI",
+  "type": "module",
+  "bin": {
+    "quorum": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "npm run build && vitest run"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.2",
+    "vitest": "^3.0.0"
+  }
+}

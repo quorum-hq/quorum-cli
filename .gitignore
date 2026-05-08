@@ -1,0 +1,5 @@
+/.mvp_docs/
+/.scratch/
+docs/agents/
+node_modules/
+dist/
