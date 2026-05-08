@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { CheckpointValidationError, parseAndNormalizeSessionCheckpoint } from "../src/checkpoint/session.js";
+import {
+  CheckpointValidationError,
+  parseAndNormalizeSessionCheckpoint,
+  parseSessionCheckpointRecord,
+} from "../src/checkpoint/session.js";
 
 const HEAD = "a".repeat(40);
 
@@ -55,5 +59,14 @@ describe("parseAndNormalizeSessionCheckpoint", () => {
     expect(() =>
       parseAndNormalizeSessionCheckpoint(minimalCheckpoint({ agent: "unknown-agent" }), HEAD, "id"),
     ).toThrow(CheckpointValidationError);
+  });
+});
+
+describe("parseSessionCheckpointRecord", () => {
+  it("accepts commit_sha that does not match current HEAD (shadow history)", () => {
+    const other = "b".repeat(40);
+    const c = parseSessionCheckpointRecord(minimalCheckpoint({ commit_sha: other }), "2026-05-09-xyz");
+    expect(c.commit_sha).toBe(other.toLowerCase());
+    expect(c.id).toBe("2026-05-09-xyz");
   });
 });

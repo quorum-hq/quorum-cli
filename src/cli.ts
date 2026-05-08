@@ -3,10 +3,12 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { runBrief } from "./commands/brief.js";
 import { runCheckpoint } from "./commands/checkpoint.js";
 import { runDisable } from "./commands/disable.js";
 import { runInit } from "./commands/init.js";
 import { runInstall } from "./commands/install.js";
+import { runPin, runPinsList, runUnpin } from "./commands/pins.js";
 import { runRetry } from "./commands/retry.js";
 import { ConfigError } from "./config/validate.js";
 
@@ -45,7 +47,11 @@ function usage(): void {
       "       quorum install\n" +
       "       quorum disable\n" +
       "       quorum checkpoint --agent <id> <transcript-file>\n" +
-      "       quorum retry",
+      "       quorum retry\n" +
+      "       quorum brief [--tokens N] [path...]\n" +
+      "       quorum pin <checkpoint-id> <decision-id>\n" +
+      "       quorum unpin <checkpoint-id> <decision-id>\n" +
+      "       quorum pins",
   );
 }
 
@@ -90,10 +96,22 @@ async function main(): Promise<void> {
       case "retry":
         await runRetry(gitRoot);
         return;
+      case "brief":
+        runBrief(gitRoot, argv.slice(1));
+        return;
+      case "pin":
+        runPin(gitRoot, argv.slice(1));
+        return;
+      case "unpin":
+        runUnpin(gitRoot, argv.slice(1));
+        return;
+      case "pins":
+        runPinsList(gitRoot);
+        return;
       default:
         eprint(
           `quorum: unknown command "${first}".\n` +
-            "  Try: quorum version | quorum init | quorum checkpoint --agent <id> <file> | quorum retry",
+            "  Try: quorum version | quorum init | quorum checkpoint --agent <id> <file> | quorum retry | quorum brief",
         );
         process.exit(1);
     }

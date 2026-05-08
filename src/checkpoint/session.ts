@@ -76,11 +76,27 @@ function parseDecision(path: string, raw: unknown): SessionDecision {
   };
 }
 
+/**
+ * Validate session checkpoint JSON as stored on the shadow branch (historical `commit_sha` allowed).
+ * Sets `id` from `fileId` (shadow filename stem).
+ */
+export function parseSessionCheckpointRecord(raw: unknown, fileId: string): SessionCheckpoint {
+  return parseSessionCheckpointInner(raw, fileId, { mode: "record" });
+}
+
 /** Validate distilled JSON and normalize `commit_sha` to the repo `HEAD` SHA at capture time. */
 export function parseAndNormalizeSessionCheckpoint(
   raw: unknown,
   headSha: string,
   fileId: string,
+): SessionCheckpoint {
+  return parseSessionCheckpointInner(raw, fileId, { mode: "head", headSha });
+}
+
+function parseSessionCheckpointInner(
+  raw: unknown,
+  fileId: string,
+  mode: { mode: "record" } | { mode: "head"; headSha: string },
 ): SessionCheckpoint {
   if (!isPlainObject(raw)) {
     throw new CheckpointValidationError("checkpoint root must be a JSON object");
@@ -98,13 +114,21 @@ export function parseAndNormalizeSessionCheckpoint(
   if (!isHexSha40(commitSha)) {
     throw new CheckpointValidationError("commit_sha must be a 40-character hex git object id");
   }
-  if (!isHexSha40(headSha)) {
-    throw new CheckpointValidationError("internal error: HEAD sha is not a 40-character hex id");
-  }
-  if (commitSha.toLowerCase() !== headSha.toLowerCase()) {
-    throw new CheckpointValidationError(
-      `checkpoint commit_sha ${commitSha} does not match current HEAD ${headSha}`,
-    );
+
+  let normalizedCommitSha: string;
+  if (mode.mode === "head") {
+    const headSha = mode.headSha;
+    if (!isHexSha40(headSha)) {
+      throw new CheckpointValidationError("internal error: HEAD sha is not a 40-character hex id");
+    }
+    if (commitSha.toLowerCase() !== headSha.toLowerCase()) {
+      throw new CheckpointValidationError(
+        `checkpoint commit_sha ${commitSha} does not match current HEAD ${headSha}`,
+      );
+    }
+    normalizedCommitSha = headSha.toLowerCase();
+  } else {
+    normalizedCommitSha = commitSha.toLowerCase();
   }
 
   const decisionsRaw = raw.decisions;
@@ -148,7 +172,7 @@ export function parseAndNormalizeSessionCheckpoint(
     session_id: expectString("session_id", raw.session_id),
     created_at: expectString("created_at", raw.created_at),
     agent,
-    commit_sha: headSha.toLowerCase(),
+    commit_sha: normalizedCommitSha,
     intent: expectString("intent", raw.intent),
     decisions,
     files_touched: [...filesRaw],
