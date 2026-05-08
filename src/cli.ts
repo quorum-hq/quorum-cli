@@ -3,9 +3,11 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { runCheckpoint } from "./commands/checkpoint.js";
 import { runDisable } from "./commands/disable.js";
 import { runInit } from "./commands/init.js";
 import { runInstall } from "./commands/install.js";
+import { runRetry } from "./commands/retry.js";
 import { ConfigError } from "./config/validate.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -41,11 +43,13 @@ function usage(): void {
       "  Try: quorum version\n" +
       "       quorum init\n" +
       "       quorum install\n" +
-      "       quorum disable",
+      "       quorum disable\n" +
+      "       quorum checkpoint --agent <id> <transcript-file>\n" +
+      "       quorum retry",
   );
 }
 
-function main(): void {
+async function main(): Promise<void> {
   const argv = process.argv.slice(2);
   const first = argv[0];
 
@@ -80,8 +84,17 @@ function main(): void {
       case "disable":
         runDisable(gitRoot);
         process.exit(0);
+      case "checkpoint":
+        await runCheckpoint(gitRoot, argv.slice(1));
+        return;
+      case "retry":
+        await runRetry(gitRoot);
+        return;
       default:
-        eprint(`quorum: unknown command "${first}".\n  Try: quorum version`);
+        eprint(
+          `quorum: unknown command "${first}".\n` +
+            "  Try: quorum version | quorum init | quorum checkpoint --agent <id> <file> | quorum retry",
+        );
         process.exit(1);
     }
   } catch (e) {
@@ -93,4 +106,8 @@ function main(): void {
   }
 }
 
-main();
+main().catch((e) => {
+  const msg = e instanceof Error ? e.stack ?? e.message : String(e);
+  process.stderr.write(`${msg}\n`);
+  process.exit(1);
+});

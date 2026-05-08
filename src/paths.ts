@@ -15,3 +15,15 @@ export function quorumLocalPath(gitRoot: string): string {
 export function gitHooksDir(gitRoot: string): string {
   return join(gitRoot, ".git", "hooks");
 }
+
+export function quorumSessionsDir(gitRoot: string): string {
+  return join(quorumDir(gitRoot), "sessions");
+}
+
+export function quorumPendingDir(gitRoot: string): string {
+  return join(quorumSessionsDir(gitRoot), "pending");
+}
+
+export function quorumShadowWorktreesDir(gitRoot: string): string {
+  return join(quorumDir(gitRoot), "shadow-worktrees");
+}
