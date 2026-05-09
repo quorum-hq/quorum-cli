@@ -1,4 +1,5 @@
-import type { SessionCheckpoint, SessionDecision } from "../checkpoint/session.js";
+import type { BriefCheckpoint } from "../checkpoint/squash-rollup.js";
+import type { SessionDecision } from "../checkpoint/session.js";
 
 const MS_PER_DAY = 86400000;
 
@@ -42,13 +43,27 @@ export function rankScore(overlap: number, createdAt: string, nowMs: number): nu
   return overlap * decay;
 }
 
-function formatDecisionBlock(cp: SessionCheckpoint, d: SessionDecision): string {
+function formatDecisionBlock(cp: BriefCheckpoint, d: SessionDecision): string {
   return [`${cp.id} | ${d.id} | ${d.topic}`, `conclusion: ${d.conclusion}`, `rationale: ${d.rationale}`].join("\n");
+}
+
+/** When a rollup overlaps the target paths, omit absorbed session checkpoints so the rollup narrative wins. */
+function excludeSessionsSupersededByRollup(checkpoints: BriefCheckpoint[], targetSet: Set<string>): BriefCheckpoint[] {
+  const suppressedSessionIds = new Set<string>();
+  for (const cp of checkpoints) {
+    if (cp.kind !== "squash_rollup") continue;
+    if (overlapCount(cp.files_touched, targetSet) <= 0) continue;
+    for (const id of cp.sources) suppressedSessionIds.add(id);
+  }
+  return checkpoints.filter((cp) => {
+    if (cp.kind === "squash_rollup") return true;
+    return !suppressedSessionIds.has(cp.id);
+  });
 }
 
 export function assembleBrief(input: {
   targetPaths: string[];
-  checkpoints: SessionCheckpoint[];
+  checkpoints: BriefCheckpoint[];
   nominalTokenBudget: number;
   nowMs: number;
   /** When provided, refines the empty-checkpoint message if sessions exist on shadow but none apply to HEAD. */
@@ -60,7 +75,7 @@ export function assembleBrief(input: {
     if (input.shadowSessionCount !== undefined && input.shadowSessionCount > 0) {
       return {
         body:
-          "No prior context for the current HEAD (no reachable session checkpoints for this commit; if you rebased or amended, run `quorum reconcile` or keep Quorum post-rewrite hooks enabled).\n",
+          "No prior context for the current HEAD (no reachable Quorum checkpoints for this commit; if you rebased or amended, run `quorum reconcile` or keep Quorum post-rewrite hooks enabled).\n",
         stderrOverflow: null,
       };
     }
@@ -70,7 +85,8 @@ export function assembleBrief(input: {
     return { body: "No prior context for the selected paths.\n", stderrOverflow: null };
   }
 
-  const matching = input.checkpoints.filter((c) => overlapCount(c.files_touched, targetSet) > 0);
+  let matching = input.checkpoints.filter((c) => overlapCount(c.files_touched, targetSet) > 0);
+  matching = excludeSessionsSupersededByRollup(matching, targetSet);
   if (matching.length === 0) {
     return { body: "No prior context for the selected paths.\n", stderrOverflow: null };
   }

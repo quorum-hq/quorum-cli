@@ -50,7 +50,7 @@ function usage(): void {
       "       quorum disable\n" +
       "       quorum checkpoint --agent <id> <transcript-file>\n" +
       "       quorum retry\n" +
-      "       quorum reconcile --landing <sha> [--checkpoint <id> ...] [--pr <n>]\n" +
+      "       quorum reconcile --landing <sha> [--checkpoint <id> ...] [--pr <n>] [--rollup --agent <id> --rollup-transcript <path>]\n" +
       "       quorum brief [--tokens N] [path...]\n" +
       "       quorum pin <checkpoint-id> <decision-id>\n" +
       "       quorum unpin <checkpoint-id> <decision-id>\n" +
@@ -100,7 +100,7 @@ async function main(): Promise<void> {
         await runRetry(gitRoot);
         return;
       case "reconcile":
-        runReconcile(gitRoot, argv.slice(1));
+        await runReconcile(gitRoot, argv.slice(1));
         return;
       case "internal":
         runInternal(gitRoot, argv.slice(1));

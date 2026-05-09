@@ -12,6 +12,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const projectRoot = join(__dirname, "..");
 const cliEntry = join(projectRoot, "dist/cli.js");
 const distillStub = join(projectRoot, "tests/fixtures/distill-stub.mjs");
+const rollupStub = join(projectRoot, "tests/fixtures/rollup-distill-stub.mjs");
 
 function freshGitRepo(): string {
   const dir = mkdtempSync(join(tmpdir(), "quorum-reconcile-"));
@@ -105,6 +106,85 @@ describe("quorum reconcile / post-rewrite / brief linkage", () => {
     expect(parsed.absorbed_checkpoint_ids).toContain(stem);
   });
 
+  it("reconcile --rollup writes squash_rollup JSON (sources from manifest) and brief prefers rollup narrative", () => {
+    const dir = freshGitRepo();
+    writeFileSync(join(dir, "README.md"), "# t\n", "utf-8");
+    spawnSync("git", ["add", "README.md"], { cwd: dir, stdio: "ignore" });
+    spawnSync("git", ["commit", "-m", "init"], { cwd: dir, stdio: "ignore" });
+    const landing =
+      spawnSync("git", ["rev-parse", "HEAD"], { cwd: dir, encoding: "utf-8" }).stdout?.trim() ?? "";
+
+    runQuorumCapture(dir, ["init"]);
+    writeFileSync(join(dir, "transcript.txt"), "stub", "utf-8");
+    writeFileSync(join(dir, ".quorum-checkpoint-test-head"), `${landing}\n`, "utf-8");
+    const chk = runQuorumCapture(dir, ["checkpoint", "--agent", "claude-code", "transcript.txt"], {
+      QUORUM_DISTILL_WRAPPER: distillStub,
+    });
+    expect(chk.status).toBe(0);
+
+    const r = spawnSync("git", ["ls-tree", "-r", "--name-only", "quorum/context/v1"], {
+      cwd: dir,
+      encoding: "utf-8",
+    });
+    const sessionRel =
+      (r.stdout ?? "")
+        .split("\n")
+        .map((l) => l.trim())
+        .filter((l) => l.endsWith(".json") && !l.startsWith("rewrite/"))[0] ?? "";
+    expect(sessionRel.length).toBeGreaterThan(0);
+    const stem = sessionRel.replace(/\.json$/, "");
+    const blobBefore =
+      spawnSync("git", ["rev-parse", `quorum/context/v1:${sessionRel}`], {
+        cwd: dir,
+        encoding: "utf-8",
+      }).stdout?.trim() ?? "";
+
+    writeFileSync(join(dir, ".quorum-rollup-test-landing"), `${landing}\n`, "utf-8");
+    writeFileSync(join(dir, "rollup.txt"), "rollup transcript\n", "utf-8");
+
+    const rec = runQuorumCapture(
+      dir,
+      [
+        "reconcile",
+        "--landing",
+        landing,
+        "--checkpoint",
+        stem,
+        "--rollup",
+        "--agent",
+        "claude-code",
+        "--rollup-transcript",
+        "rollup.txt",
+      ],
+      { QUORUM_ROLLUP_DISTILL_WRAPPER: rollupStub },
+    );
+    expect(rec.status).toBe(0);
+
+    const rollupPaths = shadowJsonPaths(dir, "quorum/context/v1").filter((p) => p.startsWith("rollup-"));
+    expect(rollupPaths.length).toBe(1);
+    const rollupRaw = showShadowJsonAt(dir, "quorum/context/v1", rollupPaths[0]);
+    const rollupParsed = JSON.parse(rollupRaw) as {
+      kind: string;
+      commit_sha: string;
+      sources: string[];
+    };
+    expect(rollupParsed.kind).toBe("squash_rollup");
+    expect(rollupParsed.commit_sha).toBe(landing.toLowerCase());
+    expect(rollupParsed.sources).toContain(stem);
+
+    const blobAfter =
+      spawnSync("git", ["rev-parse", `quorum/context/v1:${sessionRel}`], {
+        cwd: dir,
+        encoding: "utf-8",
+      }).stdout?.trim() ?? "";
+    expect(blobAfter).toBe(blobBefore);
+
+    const brief = runQuorumCapture(dir, ["brief", "README.md"]);
+    expect(brief.status).toBe(0);
+    expect(brief.stdout).toContain("dec-rollup-stub");
+    expect(brief.stdout).not.toContain("dec-fixture-1");
+  });
+
   it("after amend without reconcile, brief explains checkpoints are not reachable for HEAD", () => {
     const dir = freshGitRepo();
     writeFileSync(join(dir, "README.md"), "# t\n", "utf-8");
@@ -134,6 +214,7 @@ describe("quorum reconcile / post-rewrite / brief linkage", () => {
     const brief = runQuorumCapture(dir, ["brief", "README.md"]);
     expect(brief.status).toBe(0);
     expect(brief.stdout).toContain("No prior context for the current HEAD");
+    expect(brief.stdout).toContain("reachable Quorum checkpoints");
     expect(brief.stdout).toContain("reconcile");
   });
 

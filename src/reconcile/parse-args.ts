@@ -1,13 +1,29 @@
+import type { AgentId } from "../config/constants.js";
+import { ALLOWED_AGENT_IDS } from "../config/constants.js";
+
 export type ReconcileCliArgs = {
   landing: string;
   checkpoints: string[];
   pr?: number;
+  rollup?: { agent: AgentId; transcript: string };
 };
+
+function parseAgentId(flagLabel: string, s: string): AgentId {
+  if (!(ALLOWED_AGENT_IDS as readonly string[]).includes(s)) {
+    throw new Error(
+      `unknown ${flagLabel} ${JSON.stringify(s)} — supported: ${ALLOWED_AGENT_IDS.join(", ")}`,
+    );
+  }
+  return s as AgentId;
+}
 
 export function parseReconcileArgs(argv: string[]): ReconcileCliArgs {
   let landing: string | undefined;
   const checkpoints: string[] = [];
   let pr: number | undefined;
+  let rollup = false;
+  let rollupTranscript: string | undefined;
+  let agent: string | undefined;
 
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -21,6 +37,12 @@ export function parseReconcileArgs(argv: string[]): ReconcileCliArgs {
         throw new Error("--pr must be a positive integer");
       }
       pr = n;
+    } else if (a === "--rollup") {
+      rollup = true;
+    } else if (a === "--rollup-transcript" && argv[i + 1]) {
+      rollupTranscript = argv[++i];
+    } else if (a === "--agent" && argv[i + 1]) {
+      agent = argv[++i];
     } else if (a) {
       throw new Error(`unexpected argument ${JSON.stringify(a)}`);
     }
@@ -33,5 +55,19 @@ export function parseReconcileArgs(argv: string[]): ReconcileCliArgs {
     throw new Error("--landing must be a 40-character hex git object id");
   }
 
-  return { landing: landing.toLowerCase(), checkpoints, pr };
+  const out: ReconcileCliArgs = { landing: landing.toLowerCase(), checkpoints, pr };
+
+  if (rollup) {
+    if (!agent) {
+      throw new Error("--rollup requires --agent <id>");
+    }
+    if (!rollupTranscript) {
+      throw new Error("--rollup requires --rollup-transcript <path>");
+    }
+    out.rollup = { agent: parseAgentId("--agent", agent), transcript: rollupTranscript };
+  } else if (agent) {
+    throw new Error("--agent is only valid with --rollup");
+  }
+
+  return out;
 }

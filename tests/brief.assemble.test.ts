@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SessionCheckpoint } from "../src/checkpoint/session.js";
+import type { SquashRollupCheckpoint } from "../src/checkpoint/squash-rollup.js";
 import {
   assembleBrief,
   estimateTokens,
@@ -19,6 +20,20 @@ function sessionCheckpoint(partial: Partial<SessionCheckpoint> & Pick<SessionChe
     intent: "test",
     branch: null,
     pr_number: null,
+    decisions: [],
+    files_touched: [],
+    open_questions: [],
+    ...partial,
+  };
+}
+
+function rollupCheckpoint(partial: Partial<SquashRollupCheckpoint> & Pick<SquashRollupCheckpoint, "id" | "created_at" | "sources">): SquashRollupCheckpoint {
+  return {
+    kind: "squash_rollup",
+    rollup_id: "550e8400-e29b-41d4-a716-4466554400aa",
+    agent: "claude-code",
+    commit_sha: SHA,
+    intent: "rollup test",
     decisions: [],
     files_touched: [],
     open_questions: [],
@@ -146,6 +161,56 @@ describe("assembleBrief", () => {
       nowMs: frozenNow,
     });
     expect(body).toBe("No prior context for the selected paths.\n");
+  });
+
+  it("prefers squash rollup narrative: hides absorbed session checkpoints when rollup overlaps targets", () => {
+    const absorbed = sessionCheckpoint({
+      id: "sess-under-rollup",
+      created_at: "2026-05-09T10:00:00.000Z",
+      files_touched: ["app/foo.ts"],
+      decisions: [{ id: "granular", topic: "G", conclusion: "hidden", rationale: "r", canonical: false }],
+    });
+    const rollup = rollupCheckpoint({
+      id: "rollup-1",
+      created_at: "2026-05-09T11:00:00.000Z",
+      sources: ["sess-under-rollup"],
+      files_touched: ["app/foo.ts"],
+      decisions: [{ id: "rollup-dec", topic: "R", conclusion: "visible", rationale: "r", canonical: false }],
+    });
+    const { body } = assembleBrief({
+      targetPaths: ["app/foo.ts"],
+      checkpoints: [absorbed, rollup],
+      nominalTokenBudget: 10_000,
+      nowMs: frozenNow,
+    });
+    expect(body).toContain("rollup-1");
+    expect(body).toContain("rollup-dec");
+    expect(body).not.toContain("granular");
+    expect(body).not.toContain("hidden");
+  });
+
+  it("does not suppress granular checkpoints when rollup does not overlap selected paths", () => {
+    const absorbed = sessionCheckpoint({
+      id: "sess-a",
+      created_at: "2026-05-09T10:00:00.000Z",
+      files_touched: ["app/foo.ts"],
+      decisions: [{ id: "keep-me", topic: "K", conclusion: "kept", rationale: "r", canonical: false }],
+    });
+    const rollup = rollupCheckpoint({
+      id: "rollup-x",
+      created_at: "2026-05-09T11:00:00.000Z",
+      sources: ["sess-a"],
+      files_touched: ["other/file.ts"],
+      decisions: [{ id: "r1", topic: "R", conclusion: "rollup-only", rationale: "r", canonical: false }],
+    });
+    const { body } = assembleBrief({
+      targetPaths: ["app/foo.ts"],
+      checkpoints: [absorbed, rollup],
+      nominalTokenBudget: 10_000,
+      nowMs: frozenNow,
+    });
+    expect(body).toContain("keep-me");
+    expect(body).toContain("kept");
   });
 
   it("matches golden brief shape for overlapping files_touched", () => {

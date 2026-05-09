@@ -5,9 +5,9 @@ import { trackedDiffPathsVsHead } from "../brief/target-paths.js";
 import { loadMergedConfig } from "../config/load.js";
 import { ConfigError } from "../config/validate.js";
 import {
-  filterSessionCheckpointsActiveAtHead,
+  filterBriefCheckpointsActiveAtHead,
+  loadBriefCheckpointsFromShadow,
   loadRewriteManifestsFromShadow,
-  loadSessionCheckpointsFromShadow,
 } from "../shadow/read-checkpoints.js";
 
 function eprint(msg: string): void {
@@ -70,9 +70,9 @@ export function runBrief(gitRoot: string, argv: string[]): void {
     cwd: gitRoot,
     encoding: "utf-8",
   }).trim();
-  const allSessions = loadSessionCheckpointsFromShadow(gitRoot, merged.shadow_branch);
+  const allBrief = loadBriefCheckpointsFromShadow(gitRoot, merged.shadow_branch);
   const manifests = loadRewriteManifestsFromShadow(gitRoot, merged.shadow_branch);
-  const checkpoints = filterSessionCheckpointsActiveAtHead(gitRoot, headSha, allSessions, manifests);
+  const checkpoints = filterBriefCheckpointsActiveAtHead(gitRoot, headSha, allBrief, manifests);
   const targetPaths =
     parsed.paths.length > 0 ? resolveTargetPathsToRepoRelative(gitRoot, parsed.paths) : trackedDiffPathsVsHead(gitRoot);
 
@@ -82,7 +82,7 @@ export function runBrief(gitRoot: string, argv: string[]): void {
     checkpoints,
     nominalTokenBudget: nominal,
     nowMs: Date.now(),
-    shadowSessionCount: allSessions.length,
+    shadowSessionCount: allBrief.length,
   });
 
   if (stderrOverflow) {

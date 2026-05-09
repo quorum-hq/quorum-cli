@@ -1,0 +1,51 @@
+# Copy into `.github/workflows/` and adjust checkout/install steps for your repo layout.
+#
+# Rollup-only CI exception (no agent CLI on the runner): set QUORUM_ROLLUP_DISTILL_WRAPPER to an
+# executable that prints <<QUORUM_JSON>> … <<END_QUORUM_JSON>> with valid squash_rollup JSON whose
+# commit_sha matches --landing. Example harness: tests/fixtures/rollup-distill-stub.mjs in this repo.
+#
+# Optional secret (alternative to repo/env configuration): pass the wrapper path or script body via env.
+
+name: quorum-reconcile-squash-merge
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+jobs:
+  reconcile:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # Example: quorum-cli lives in-repo; replace with npm install -g or published package.
+      - name: Install quorum CLI
+        working-directory: ./path/to/quorum-cli
+        run: npm ci && npm run build
+
+      - name: Rewrite manifest + optional rollup checkpoint
+        working-directory: ${{ github.workspace }}
+        env:
+          QUORUM_ROLLUP_DISTILL_WRAPPER: ${{ secrets.QUORUM_ROLLUP_DISTILL_WRAPPER }}
+        run: |
+          set -euo pipefail
+          LANDING="${{ github.event.pull_request.merge_commit_sha }}"
+          PR="${{ github.event.pull_request.number }}"
+          CLI="${{ github.workspace }}/path/to/quorum-cli/dist/cli.js"
+          node "$CLI" reconcile \
+            --landing "$LANDING" \
+            --pr "$PR" \
+            --rollup \
+            --agent claude-code \
+            --rollup-transcript path/to/rollup-transcript.md
