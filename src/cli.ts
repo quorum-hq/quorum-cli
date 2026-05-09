@@ -11,6 +11,7 @@ import { runInstall } from "./commands/install.js";
 import { runInternal } from "./commands/internal.js";
 import { runPin, runPinsList, runUnpin } from "./commands/pins.js";
 import { runReconcile } from "./commands/reconcile.js";
+import { runLog, runShow } from "./commands/log-show.js";
 import { runRetry } from "./commands/retry.js";
 import { ConfigError } from "./config/validate.js";
 
@@ -54,7 +55,9 @@ function usage(): void {
       "       quorum brief [--tokens N] [path...]\n" +
       "       quorum pin <checkpoint-id> <decision-id>\n" +
       "       quorum unpin <checkpoint-id> <decision-id>\n" +
-      "       quorum pins",
+      "       quorum pins\n" +
+      "       quorum log [path-prefix]\n" +
+      "       quorum show <id>",
   );
 }
 
@@ -117,10 +120,16 @@ async function main(): Promise<void> {
       case "pins":
         runPinsList(gitRoot);
         return;
+      case "log":
+        runLog(gitRoot, argv.slice(1));
+        process.exit(0);
+      case "show":
+        runShow(gitRoot, argv.slice(1));
+        process.exit(0);
       default:
         eprint(
           `quorum: unknown command "${first}".\n` +
-            "  Try: quorum version | quorum init | quorum checkpoint --agent <id> <file> | quorum retry | quorum brief",
+            "  Try: quorum version | quorum init | quorum checkpoint --agent <id> <file> | quorum retry | quorum brief | quorum log | quorum show <id>",
         );
         process.exit(1);
     }
