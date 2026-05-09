@@ -44,6 +44,9 @@ function bareOriginAndWorkrepo(): { bare: string; work: string } {
   spawnSync("git", ["commit", "-m", "init"], { cwd: work, stdio: "ignore" });
   spawnSync("git", ["branch", "-M", "main"], { cwd: work, stdio: "ignore" });
   spawnSync("git", ["push", "-u", "origin", "main"], { cwd: work, stdio: "ignore" });
+  // Bare repos default HEAD to refs/heads/master; we only have main. Clones follow bare HEAD, so
+  // without this, `git rev-parse HEAD` can fail on Linux (macOS often has init.defaultBranch=main).
+  spawnSync("git", ["symbolic-ref", "HEAD", "refs/heads/main"], { cwd: bare, stdio: "ignore" });
   return { bare, work };
 }
 
