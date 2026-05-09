@@ -72,7 +72,7 @@ function sessionBody(
 }
 
 describe("quorum log / quorum show", () => {
-  it("lists shadow checkpoints in chronological order by created_at (not git commit order)", () => {
+  it("lists shadow checkpoints newest-first by created_at (not git commit order)", () => {
     const dir = freshGitRepo();
     writeFileSync(join(dir, "README.md"), "# t\n", "utf-8");
     spawnSync("git", ["add", "README.md"], { cwd: dir, stdio: "ignore" });
@@ -83,7 +83,7 @@ describe("quorum log / quorum show", () => {
     runQuorumCapture(dir, ["init"]);
 
     const shadow = "quorum/context/v1";
-    // Commit newer created_at first, older second — display should still be oldest-first.
+    // Commit newer created_at first, older second — display is newest-first by checkpoint time.
     commitCheckpointJsonOnShadowBranch(
       dir,
       shadow,
@@ -112,11 +112,14 @@ describe("quorum log / quorum show", () => {
     const r = runQuorumCapture(dir, ["log"]);
     expect(r.status).toBe(0);
     expect(r.stderr).toBe("");
+    expect(r.stdout).toContain("Quorum shadow log");
+    expect(r.stdout).toContain("2 entries");
+    expect(r.stdout).toContain("newest first");
     const older = r.stdout.indexOf("2026-06-01-first");
     const newer = r.stdout.indexOf("2026-06-02-second");
     expect(older).toBeGreaterThanOrEqual(0);
     expect(newer).toBeGreaterThanOrEqual(0);
-    expect(older).toBeLessThan(newer);
+    expect(newer).toBeLessThan(older);
     expect(r.stdout).toContain("Older session");
     expect(r.stdout).toContain("Newer session");
   });
@@ -147,12 +150,13 @@ describe("quorum log / quorum show", () => {
 
     const r = runQuorumCapture(dir, ["log", "src/auth/"]);
     expect(r.status).toBe(0);
+    expect(r.stdout).toContain("Filtered to paths under: src/auth/");
     expect(r.stdout).toContain("2026-06-01-a");
     expect(r.stdout).toContain("Auth work");
     expect(r.stdout).not.toContain("2026-06-01-b");
   });
 
-  it("show prints pretty JSON for a checkpoint id; ambiguous id fails with candidates", () => {
+  it("show defaults to human layout; --json prints indented JSON; ambiguous id fails with candidates", () => {
     const dir = freshGitRepo();
     writeFileSync(join(dir, "README.md"), "# t\n", "utf-8");
     spawnSync("git", ["add", "README.md"], { cwd: dir, stdio: "ignore" });
@@ -175,14 +179,22 @@ describe("quorum log / quorum show", () => {
       sessionBody("2026-06-01-b", "2026-06-01T11:00:00.000Z", "Other", ["lib/foo.ts"], head),
     );
 
-    const show = runQuorumCapture(dir, ["show", "2026-06-01-a"]);
+    const human = runQuorumCapture(dir, ["show", "2026-06-01-a"]);
+    expect(human.status).toBe(0);
+    expect(human.stdout).toContain("Checkpoint");
+    expect(human.stdout).toContain("kind");
+    expect(human.stdout).toContain("2026-06-01-a");
+    expect(human.stdout).toContain("Auth work");
+    expect(human.stdout).toContain("Decisions");
+
+    const show = runQuorumCapture(dir, ["show", "2026-06-01-a", "--json"]);
     expect(show.status).toBe(0);
     expect(show.stdout).toContain('"kind": "session"');
     expect(show.stdout).toContain('"id": "2026-06-01-a"');
 
     const usage = runQuorumCapture(dir, ["show"]);
     expect(usage.status).toBe(1);
-    expect(usage.stderr).toMatch(/less|page/i);
+    expect(usage.stderr).toContain("Usage: quorum show");
 
     const amb = runQuorumCapture(dir, ["show", "2026-06-01"]);
     expect(amb.status).toBe(1);
@@ -217,7 +229,7 @@ describe("quorum log / quorum show", () => {
     const mPath = `rewrite/${head.toLowerCase()}.json`;
     upsertCheckpointJsonOnShadowBranch(dir, shadow, mPath, serializeRewriteManifest(manifest));
 
-    const r = runQuorumCapture(dir, ["show", head]);
+    const r = runQuorumCapture(dir, ["show", head, "--json"]);
     expect(r.status).toBe(0);
     expect(r.stdout).toContain('"kind": "rewrite"');
     expect(r.stdout).toContain(`"landing_commit_sha": "${head.toLowerCase()}"`);

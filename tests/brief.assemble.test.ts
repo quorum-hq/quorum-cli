@@ -213,6 +213,53 @@ describe("assembleBrief", () => {
     expect(body).toContain("kept");
   });
 
+  it("keeps canonical and context rows distinct when the same decision id appears on different checkpoints", () => {
+    const a = sessionCheckpoint({
+      id: "cp-a",
+      created_at: "2026-05-01T10:00:00.000Z",
+      files_touched: ["README.md"],
+      decisions: [{ id: "d1", topic: "First", conclusion: "from-a", rationale: "r", canonical: true }],
+    });
+    const b = sessionCheckpoint({
+      id: "cp-b",
+      created_at: "2026-05-02T10:00:00.000Z",
+      files_touched: ["README.md"],
+      decisions: [{ id: "d1", topic: "Second", conclusion: "from-b", rationale: "r", canonical: true }],
+    });
+    const { body } = assembleBrief({
+      targetPaths: ["README.md"],
+      checkpoints: [a, b],
+      nominalTokenBudget: 10_000,
+      nowMs: frozenNow,
+    });
+    expect(body).toContain("[canonical]");
+    expect(body).toContain("cp-a | d1 | First");
+    expect(body).toContain("from-a");
+    expect(body).toContain("cp-b | d1 | Second");
+    expect(body).toContain("from-b");
+
+    const x = sessionCheckpoint({
+      id: "cx",
+      created_at: "2026-05-03T10:00:00.000Z",
+      files_touched: ["x.ts"],
+      decisions: [{ id: "d1", topic: "X", conclusion: "x-only", rationale: "r", canonical: false }],
+    });
+    const y = sessionCheckpoint({
+      id: "cy",
+      created_at: "2026-05-04T10:00:00.000Z",
+      files_touched: ["x.ts"],
+      decisions: [{ id: "d1", topic: "Y", conclusion: "y-only", rationale: "r", canonical: false }],
+    });
+    const ctxOnly = assembleBrief({
+      targetPaths: ["x.ts"],
+      checkpoints: [x, y],
+      nominalTokenBudget: 10_000,
+      nowMs: frozenNow,
+    });
+    expect(ctxOnly.body).toContain("cx | d1 | X");
+    expect(ctxOnly.body).toContain("cy | d1 | Y");
+  });
+
   it("matches golden brief shape for overlapping files_touched", () => {
     const a = sessionCheckpoint({
       id: "2026-05-01-a",

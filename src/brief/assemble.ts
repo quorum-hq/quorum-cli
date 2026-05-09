@@ -47,6 +47,11 @@ function formatDecisionBlock(cp: BriefCheckpoint, d: SessionDecision): string {
   return [`${cp.id} | ${d.id} | ${d.topic}`, `conclusion: ${d.conclusion}`, `rationale: ${d.rationale}`].join("\n");
 }
 
+/** One row per (checkpoint, decision); decision ids are not guaranteed unique across checkpoints. */
+function decisionOccurrenceKey(checkpointId: string, decisionId: string): string {
+  return `${checkpointId}\0${decisionId}`;
+}
+
 /** When a rollup overlaps the target paths, omit absorbed session checkpoints so the rollup narrative wins. */
 function excludeSessionsSupersededByRollup(checkpoints: BriefCheckpoint[], targetSet: Set<string>): BriefCheckpoint[] {
   const suppressedSessionIds = new Set<string>();
@@ -104,12 +109,13 @@ export function assembleBrief(input: {
   const orderedCps = scored.map((s) => s.cp);
 
   const canonBlocks: string[] = [];
-  const seenCanonIds = new Set<string>();
+  const seenCanonKeys = new Set<string>();
   for (const cp of orderedCps) {
     for (const d of cp.decisions) {
       if (!d.canonical) continue;
-      if (seenCanonIds.has(d.id)) continue;
-      seenCanonIds.add(d.id);
+      const key = decisionOccurrenceKey(cp.id, d.id);
+      if (seenCanonKeys.has(key)) continue;
+      seenCanonKeys.add(key);
       canonBlocks.push(formatDecisionBlock(cp, d));
     }
   }
@@ -125,17 +131,18 @@ export function assembleBrief(input: {
 
   const contextBlocks: string[] = [];
   let contextTokensUsed = 0;
-  const seenCtxIds = new Set<string>();
+  const seenCtxKeys = new Set<string>();
   outer: for (const cp of orderedCps) {
     for (const d of cp.decisions) {
       if (d.canonical) continue;
-      if (seenCtxIds.has(d.id)) continue;
+      const key = decisionOccurrenceKey(cp.id, d.id);
+      if (seenCtxKeys.has(key)) continue;
       const block = formatDecisionBlock(cp, d);
       const blockTokens = estimateTokens(block);
       if (contextTokensUsed + blockTokens > input.nominalTokenBudget) {
         break outer;
       }
-      seenCtxIds.add(d.id);
+      seenCtxKeys.add(key);
       contextBlocks.push(block);
       contextTokensUsed += blockTokens;
     }

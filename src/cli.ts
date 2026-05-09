@@ -59,7 +59,7 @@ function usage(): void {
       "       quorum unpin <checkpoint-id> <decision-id>\n" +
       "       quorum pins\n" +
       "       quorum log [path-prefix]\n" +
-      "       quorum show <id>",
+      "       quorum show [--json] <id>",
   );
 }
 
@@ -134,7 +134,7 @@ async function main(): Promise<void> {
       default:
         eprint(
           `quorum: unknown command "${first}".\n` +
-            "  Try: quorum version | quorum init | quorum status | quorum checkpoint --agent <id> <file> | quorum retry | quorum brief | quorum log | quorum show <id>",
+            "  Try: quorum version | quorum init | quorum status | quorum checkpoint --agent <id> <file> | quorum retry | quorum brief | quorum log | quorum show [--json] <id>",
         );
         process.exit(1);
     }
