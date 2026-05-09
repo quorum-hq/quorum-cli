@@ -12,6 +12,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const projectRoot = join(__dirname, "..");
 const cliEntry = join(projectRoot, "dist/cli.js");
 const distillStub = join(projectRoot, "tests/fixtures/distill-stub.mjs");
+const slowDistillStub = join(projectRoot, "tests/fixtures/slow-distill-stub.mjs");
+const recursiveDistillStub = join(projectRoot, "tests/fixtures/recursive-distill-stub.mjs");
 
 function freshGitRepo(): string {
   const dir = mkdtempSync(join(tmpdir(), "quorum-claude-hook-"));
@@ -49,6 +51,22 @@ function pendingDirCount(gitRoot: string): number {
   return readdirSync(p, { withFileTypes: true }).filter((d) => d.isDirectory()).length;
 }
 
+async function waitUntil(
+  predicate: () => boolean,
+  opts: { timeoutMs?: number; intervalMs?: number } = {},
+): Promise<void> {
+  const timeoutMs = opts.timeoutMs ?? 15_000;
+  const intervalMs = opts.intervalMs ?? 50;
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (predicate()) {
+      return;
+    }
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  throw new Error(`timeout after ${timeoutMs}ms`);
+}
+
 describe("quorum internal claude-session-end", () => {
   const sessionEndCommands = [
     { name: "claude", subcommand: "claude-session-end", lastCaptureName: "claude-code-session-end" },
@@ -60,97 +78,178 @@ describe("quorum internal claude-session-end", () => {
 
   it.each(sessionEndCommands)(
     "captures transcript artifact and commits session checkpoint on success (%s)",
-    ({ subcommand, lastCaptureName }) => {
-    const dir = freshGitRepo();
-    writeFileSync(join(dir, "README.md"), "# t\n", "utf-8");
-    spawnSync("git", ["add", "README.md"], { cwd: dir, stdio: "ignore" });
-    spawnSync("git", ["commit", "-m", "init"], { cwd: dir, stdio: "ignore" });
-    const head = spawnSync("git", ["rev-parse", "HEAD"], { cwd: dir, encoding: "utf-8" }).stdout?.trim() ?? "";
+    async ({ subcommand, lastCaptureName }) => {
+      const dir = freshGitRepo();
+      writeFileSync(join(dir, "README.md"), "# t\n", "utf-8");
+      spawnSync("git", ["add", "README.md"], { cwd: dir, stdio: "ignore" });
+      spawnSync("git", ["commit", "-m", "init"], { cwd: dir, stdio: "ignore" });
+      const head = spawnSync("git", ["rev-parse", "HEAD"], { cwd: dir, encoding: "utf-8" }).stdout?.trim() ?? "";
 
-    runQuorumCapture(dir, ["init"]);
-    writeFileSync(join(dir, "session-transcript.txt"), "fixture transcript", "utf-8");
-    writeFileSync(join(dir, ".quorum-checkpoint-test-head"), `${head}\n`, "utf-8");
+      runQuorumCapture(dir, ["init"]);
+      writeFileSync(join(dir, "session-transcript.txt"), "fixture transcript", "utf-8");
+      writeFileSync(join(dir, ".quorum-checkpoint-test-head"), `${head}\n`, "utf-8");
 
-    const before = shadowBranchCommitCount(dir, "quorum/context/v1");
-    const payload = JSON.stringify({ transcript_path: "session-transcript.txt" });
-    const r = runQuorumCapture(
-      dir,
-      ["internal", subcommand],
-      { QUORUM_DISTILL_WRAPPER: distillStub },
-      payload,
-    );
-    expect(r.status).toBe(0);
-    expect(r.stderr).not.toContain("queued as pending");
-    expect(shadowBranchCommitCount(dir, "quorum/context/v1")).toBe(before + 1);
-    expect(pendingDirCount(dir)).toBe(0);
+      const before = shadowBranchCommitCount(dir, "quorum/context/v1");
+      const payload = JSON.stringify({ transcript_path: "session-transcript.txt" });
+      const r = runQuorumCapture(
+        dir,
+        ["internal", subcommand],
+        { QUORUM_DISTILL_WRAPPER: distillStub },
+        payload,
+      );
+      expect(r.status).toBe(0);
 
-    const capturesDir = join(quorumSessionsDir(dir), "captures");
-    expect(existsSync(capturesDir)).toBe(true);
-    const captureFiles = readdirSync(capturesDir);
-    expect(captureFiles.length).toBeGreaterThan(0);
-    expect(existsSync(join(quorumSessionsDir(dir), `last-${lastCaptureName}.txt`))).toBe(true);
+      await waitUntil(() => shadowBranchCommitCount(dir, "quorum/context/v1") >= before + 1);
+
+      expect(pendingDirCount(dir)).toBe(0);
+
+      const capturesDir = join(quorumSessionsDir(dir), "captures");
+      expect(existsSync(capturesDir)).toBe(true);
+      const captureFiles = readdirSync(capturesDir);
+      expect(captureFiles.length).toBeGreaterThan(0);
+      expect(existsSync(join(quorumSessionsDir(dir), `last-${lastCaptureName}.txt`))).toBe(true);
     },
+    20_000,
+  );
+
+  it(
+    "session-end returns quickly while slow distill finishes in a background child (claude-code)",
+    async () => {
+      const dir = freshGitRepo();
+      writeFileSync(join(dir, "README.md"), "# t\n", "utf-8");
+      spawnSync("git", ["add", "README.md"], { cwd: dir, stdio: "ignore" });
+      spawnSync("git", ["commit", "-m", "init"], { cwd: dir, stdio: "ignore" });
+      const head = spawnSync("git", ["rev-parse", "HEAD"], { cwd: dir, encoding: "utf-8" }).stdout?.trim() ?? "";
+
+      runQuorumCapture(dir, ["init"]);
+      writeFileSync(join(dir, "session-transcript.txt"), "fixture transcript", "utf-8");
+      writeFileSync(join(dir, ".quorum-checkpoint-test-head"), `${head}\n`, "utf-8");
+
+      const before = shadowBranchCommitCount(dir, "quorum/context/v1");
+      const payload = JSON.stringify({ transcript_path: "session-transcript.txt" });
+      const start = Date.now();
+      const r = runQuorumCapture(
+        dir,
+        ["internal", "claude-session-end"],
+        { QUORUM_DISTILL_WRAPPER: slowDistillStub },
+        payload,
+      );
+      const elapsed = Date.now() - start;
+      expect(r.status).toBe(0);
+      expect(elapsed).toBeLessThan(2000);
+
+      await waitUntil(() => shadowBranchCommitCount(dir, "quorum/context/v1") >= before + 1, {
+        timeoutMs: 20_000,
+      });
+      expect(pendingDirCount(dir)).toBe(0);
+    },
+    25_000,
   );
 
   it.each(sessionEndCommands)(
     "writes pending and leaves shadow unchanged on distill failure (%s)",
-    ({ subcommand }) => {
-    const dir = freshGitRepo();
-    writeFileSync(join(dir, "README.md"), "# t\n", "utf-8");
-    spawnSync("git", ["add", "README.md"], { cwd: dir, stdio: "ignore" });
-    spawnSync("git", ["commit", "-m", "init"], { cwd: dir, stdio: "ignore" });
-    const head = spawnSync("git", ["rev-parse", "HEAD"], { cwd: dir, encoding: "utf-8" }).stdout?.trim() ?? "";
+    async ({ subcommand }) => {
+      const dir = freshGitRepo();
+      writeFileSync(join(dir, "README.md"), "# t\n", "utf-8");
+      spawnSync("git", ["add", "README.md"], { cwd: dir, stdio: "ignore" });
+      spawnSync("git", ["commit", "-m", "init"], { cwd: dir, stdio: "ignore" });
+      const head = spawnSync("git", ["rev-parse", "HEAD"], { cwd: dir, encoding: "utf-8" }).stdout?.trim() ?? "";
 
-    runQuorumCapture(dir, ["init"]);
-    writeFileSync(join(dir, "session-transcript.txt"), "fixture transcript", "utf-8");
-    writeFileSync(join(dir, ".quorum-checkpoint-test-head"), `${head}\n`, "utf-8");
+      runQuorumCapture(dir, ["init"]);
+      writeFileSync(join(dir, "session-transcript.txt"), "fixture transcript", "utf-8");
+      writeFileSync(join(dir, ".quorum-checkpoint-test-head"), `${head}\n`, "utf-8");
 
-    const badStub = join(dir, "bad-distill.mjs");
-    writeFileSync(
-      badStub,
-      `console.log('<<QUORUM_JSON>>'); console.log('{ not json'); console.log('<<END_QUORUM_JSON>>');\n`,
-      "utf-8",
-    );
+      const badStub = join(dir, "bad-distill.mjs");
+      writeFileSync(
+        badStub,
+        `console.log('<<QUORUM_JSON>>'); console.log('{ not json'); console.log('<<END_QUORUM_JSON>>');\n`,
+        "utf-8",
+      );
 
-    const before = shadowBranchCommitCount(dir, "quorum/context/v1");
-    const payload = JSON.stringify({ transcript_path: "session-transcript.txt" });
-    const r = runQuorumCapture(dir, ["internal", subcommand], { QUORUM_DISTILL_WRAPPER: badStub }, payload);
-    expect(r.status).toBe(0);
-    expect(shadowBranchCommitCount(dir, "quorum/context/v1")).toBe(before);
-    expect(pendingDirCount(dir)).toBe(1);
-    expect(r.stderr).toContain("queued as pending");
+      const before = shadowBranchCommitCount(dir, "quorum/context/v1");
+      const payload = JSON.stringify({ transcript_path: "session-transcript.txt" });
+      const r = runQuorumCapture(dir, ["internal", subcommand], { QUORUM_DISTILL_WRAPPER: badStub }, payload);
+      expect(r.status).toBe(0);
+
+      await waitUntil(() => pendingDirCount(dir) >= 1);
+      expect(shadowBranchCommitCount(dir, "quorum/context/v1")).toBe(before);
     },
+    20_000,
   );
 
-  it("captures codex stop hook only once per session_id", () => {
-    const dir = freshGitRepo();
-    writeFileSync(join(dir, "README.md"), "# t\n", "utf-8");
-    spawnSync("git", ["add", "README.md"], { cwd: dir, stdio: "ignore" });
-    spawnSync("git", ["commit", "-m", "init"], { cwd: dir, stdio: "ignore" });
-    const head = spawnSync("git", ["rev-parse", "HEAD"], { cwd: dir, encoding: "utf-8" }).stdout?.trim() ?? "";
+  it(
+    "claude session-end suppresses recursion when distill subprocess re-fires the hook",
+    async () => {
+      const dir = freshGitRepo();
+      writeFileSync(join(dir, "README.md"), "# t\n", "utf-8");
+      spawnSync("git", ["add", "README.md"], { cwd: dir, stdio: "ignore" });
+      spawnSync("git", ["commit", "-m", "init"], { cwd: dir, stdio: "ignore" });
+      const head = spawnSync("git", ["rev-parse", "HEAD"], { cwd: dir, encoding: "utf-8" }).stdout?.trim() ?? "";
 
-    runQuorumCapture(dir, ["init"]);
-    writeFileSync(join(dir, "session-transcript.txt"), "fixture transcript", "utf-8");
-    writeFileSync(join(dir, ".quorum-checkpoint-test-head"), `${head}\n`, "utf-8");
+      runQuorumCapture(dir, ["init"]);
+      writeFileSync(join(dir, "session-transcript.txt"), "fixture transcript", "utf-8");
+      writeFileSync(join(dir, ".quorum-checkpoint-test-head"), `${head}\n`, "utf-8");
 
-    const before = shadowBranchCommitCount(dir, "quorum/context/v1");
-    const payload = JSON.stringify({ transcript_path: "session-transcript.txt", session_id: "codex-s-1" });
-    const r1 = runQuorumCapture(
-      dir,
-      ["internal", "codex-session-end"],
-      { QUORUM_DISTILL_WRAPPER: distillStub },
-      payload,
-    );
-    const r2 = runQuorumCapture(
-      dir,
-      ["internal", "codex-session-end"],
-      { QUORUM_DISTILL_WRAPPER: distillStub },
-      payload,
-    );
-    expect(r1.status).toBe(0);
-    expect(r2.status).toBe(0);
-    expect(shadowBranchCommitCount(dir, "quorum/context/v1")).toBe(before + 1);
-    const capturesDir = join(quorumSessionsDir(dir), "captures");
-    expect(readdirSync(capturesDir).length).toBe(1);
-  });
+      const before = shadowBranchCommitCount(dir, "quorum/context/v1");
+      const payload = JSON.stringify({ transcript_path: "session-transcript.txt" });
+      const r = runQuorumCapture(
+        dir,
+        ["internal", "claude-session-end"],
+        {
+          QUORUM_DISTILL_WRAPPER: recursiveDistillStub,
+          QUORUM_TEST_GIT_ROOT: dir,
+          QUORUM_TEST_CLI: cliEntry,
+        },
+        payload,
+      );
+      expect(r.status).toBe(0);
+
+      await waitUntil(() => shadowBranchCommitCount(dir, "quorum/context/v1") >= before + 1);
+      // Give the recursive child (if it were not suppressed) a chance to land a second commit.
+      await new Promise((resolve) => setTimeout(resolve, 750));
+
+      expect(shadowBranchCommitCount(dir, "quorum/context/v1")).toBe(before + 1);
+      const capturesDir = join(quorumSessionsDir(dir), "captures");
+      expect(readdirSync(capturesDir).length).toBe(1);
+      expect(pendingDirCount(dir)).toBe(0);
+    },
+    20_000,
+  );
+
+  it(
+    "captures codex stop hook only once per session_id",
+    async () => {
+      const dir = freshGitRepo();
+      writeFileSync(join(dir, "README.md"), "# t\n", "utf-8");
+      spawnSync("git", ["add", "README.md"], { cwd: dir, stdio: "ignore" });
+      spawnSync("git", ["commit", "-m", "init"], { cwd: dir, stdio: "ignore" });
+      const head = spawnSync("git", ["rev-parse", "HEAD"], { cwd: dir, encoding: "utf-8" }).stdout?.trim() ?? "";
+
+      runQuorumCapture(dir, ["init"]);
+      writeFileSync(join(dir, "session-transcript.txt"), "fixture transcript", "utf-8");
+      writeFileSync(join(dir, ".quorum-checkpoint-test-head"), `${head}\n`, "utf-8");
+
+      const before = shadowBranchCommitCount(dir, "quorum/context/v1");
+      const payload = JSON.stringify({ transcript_path: "session-transcript.txt", session_id: "codex-s-1" });
+      const r1 = runQuorumCapture(
+        dir,
+        ["internal", "codex-session-end"],
+        { QUORUM_DISTILL_WRAPPER: distillStub },
+        payload,
+      );
+      const r2 = runQuorumCapture(
+        dir,
+        ["internal", "codex-session-end"],
+        { QUORUM_DISTILL_WRAPPER: distillStub },
+        payload,
+      );
+      expect(r1.status).toBe(0);
+      expect(r2.status).toBe(0);
+      await waitUntil(() => shadowBranchCommitCount(dir, "quorum/context/v1") >= before + 1);
+      expect(shadowBranchCommitCount(dir, "quorum/context/v1")).toBe(before + 1);
+      const capturesDir = join(quorumSessionsDir(dir), "captures");
+      expect(readdirSync(capturesDir).length).toBe(1);
+    },
+    20_000,
+  );
 });

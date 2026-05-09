@@ -2,7 +2,8 @@ import { copyFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { join, resolve } from "node:path";
 import type { QuorumMergedConfig, AgentId } from "../config/constants.js";
-import { distillCommitOrPending } from "../checkpoint/pipeline.js";
+import { spawnSessionEndBackgroundDistill } from "./spawn-background-distill.js";
+import { DISTILL_CHILD_ENV } from "../distill/resolve-command.js";
 import { quorumSessionsDir } from "../paths.js";
 
 function eprint(msg: string): void {
@@ -72,13 +73,19 @@ function persistHookTranscript(gitRoot: string, source: string): string {
   return dest;
 }
 
-export async function runSessionEndHookForAgent(
+export function runSessionEndHookForAgent(
   gitRoot: string,
   merged: QuorumMergedConfig,
   stdinText: string,
   agent: AgentId,
-): Promise<void> {
+): void {
   const internalName = `${agent}-session-end`;
+  // Distill subprocesses (e.g. `claude --print …` spawned by background-session-distill)
+  // would otherwise re-trigger this hook on their own transcripts, producing a chain of
+  // self-summarizing distills. The sentinel env is set in `distillCommitOrPending`.
+  if (process.env[DISTILL_CHILD_ENV] === "1") {
+    return;
+  }
   let payload: unknown;
   try {
     payload = JSON.parse(stdinText);
@@ -106,9 +113,12 @@ export async function runSessionEndHookForAgent(
     if (sessionId) {
       markCodexSessionCaptured(gitRoot, sessionId, capturePath);
     }
-    const result = await distillCommitOrPending(gitRoot, agent, capturePath, merged);
-    if (!result.ok) {
-      eprint(`quorum internal ${internalName}: capture queued as pending; run \`quorum retry\` after fixing distiller.`);
+    try {
+      spawnSessionEndBackgroundDistill({ gitRoot, agent, captureAbsPath: capturePath });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      eprint(`quorum internal ${internalName}: could not start background distill (${msg})`);
+      return;
     }
     const lastPath = join(quorumSessionsDir(gitRoot), `last-${internalName}.txt`);
     writeFileSync(lastPath, `${capturePath}\n`, "utf-8");
@@ -116,9 +126,12 @@ export async function runSessionEndHookForAgent(
   }
 
   const capturePath = persistHookTranscript(gitRoot, transcriptAbs);
-  const result = await distillCommitOrPending(gitRoot, agent, capturePath, merged);
-  if (!result.ok) {
-    eprint(`quorum internal ${internalName}: capture queued as pending; run \`quorum retry\` after fixing distiller.`);
+  try {
+    spawnSessionEndBackgroundDistill({ gitRoot, agent, captureAbsPath: capturePath });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    eprint(`quorum internal ${internalName}: could not start background distill (${msg})`);
+    return;
   }
   const lastPath = join(quorumSessionsDir(gitRoot), `last-${internalName}.txt`);
   writeFileSync(lastPath, `${capturePath}\n`, "utf-8");

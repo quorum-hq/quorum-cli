@@ -6,6 +6,13 @@ export const DISTILL_WRAPPER_ENV = "QUORUM_DISTILL_WRAPPER";
 /** CI / tests: wrapper used only for `quorum reconcile --rollup` distillation (checked before QUORUM_DISTILL_WRAPPER). */
 export const ROLLUP_DISTILL_WRAPPER_ENV = "QUORUM_ROLLUP_DISTILL_WRAPPER";
 
+/**
+ * Sentinel set on every distill subprocess (e.g. `claude --print …`). Inherited by any
+ * SessionEnd hook child the agent CLI itself spawns, so we can break the recursion where
+ * a distill run would otherwise re-trigger `quorum internal <agent>-session-end`.
+ */
+export const DISTILL_CHILD_ENV = "QUORUM_DISTILL_CHILD";
+
 export type DistillCommand = { command: string; args: string[] };
 
 function isNodeScriptPath(p: string): boolean {

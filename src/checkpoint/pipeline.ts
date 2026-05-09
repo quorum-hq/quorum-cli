@@ -6,7 +6,7 @@ import type { AgentId } from "../config/constants.js";
 import type { QuorumMergedConfig } from "../config/constants.js";
 import { parseAndNormalizeSessionCheckpoint, CheckpointValidationError } from "./session.js";
 import { extractJsonFromEnvelope, EnvelopeParseError } from "../envelope/extract.js";
-import { resolveDistillCommand } from "../distill/resolve-command.js";
+import { DISTILL_CHILD_ENV, resolveDistillCommand } from "../distill/resolve-command.js";
 import { spawnDistillerWithTimeout } from "../distill/spawn.js";
 import { maybePushShadowBranchAfterCommit } from "../git/shadow-push.js";
 import { commitCheckpointJsonOnShadowBranch } from "../git/shadow-commit.js";
@@ -40,7 +40,7 @@ export async function distillCommitOrPending(
     command,
     args,
     cwd: gitRoot,
-    env: { ...process.env },
+    env: { ...process.env, [DISTILL_CHILD_ENV]: "1" },
     timeoutMs,
     killGraceMs: options.killGraceMs,
   });
