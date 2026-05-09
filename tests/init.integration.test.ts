@@ -37,6 +37,19 @@ function runQuorumCapture(cwd: string, args: string[]): { stdout: string; stderr
 }
 
 describe("quorum init / install / disable", () => {
+  function readHookCommands(
+    file: string,
+    event: string,
+  ): string[] {
+    if (!existsSync(file)) {
+      return [];
+    }
+    const raw = JSON.parse(readFileSync(file, "utf-8")) as {
+      hooks?: Record<string, Array<{ hooks?: Array<{ command?: string }> }>>;
+    };
+    return raw.hooks?.[event]?.flatMap((entry) => (entry.hooks ?? []).map((h) => h.command ?? "")) ?? [];
+  }
+
   it("writes valid config, gitignores local.json, bootstraps shadow branch, and prints security notice", () => {
     const dir = freshGitRepo();
     const { stdout, stderr, status } = runQuorumCapture(dir, ["init"]);
@@ -81,12 +94,13 @@ describe("quorum init / install / disable", () => {
 
     const claudeSettings = join(dir, ".claude/settings.json");
     expect(existsSync(claudeSettings)).toBe(true);
-    const raw = JSON.parse(readFileSync(claudeSettings, "utf-8")) as {
-      hooks?: { SessionEnd?: Array<{ hooks?: Array<{ command?: string }> }> };
-    };
-    const commands =
-      raw.hooks?.SessionEnd?.flatMap((entry) => (entry.hooks ?? []).map((h) => h.command ?? "")) ?? [];
+    const commands = readHookCommands(claudeSettings, "SessionEnd");
     expect(commands).toContain(QUORUM_CLAUDE_COMMAND);
+
+    expect(existsSync(join(dir, ".cursor/settings.json"))).toBe(false);
+    expect(existsSync(join(dir, ".gemini/settings.json"))).toBe(false);
+    expect(existsSync(join(dir, ".opencode/settings.json"))).toBe(false);
+    expect(existsSync(join(dir, ".codex/hooks.json"))).toBe(false);
   });
 
   it("disable removes Quorum post-rewrite hook; shadow branch remains", () => {
@@ -104,7 +118,6 @@ describe("quorum init / install / disable", () => {
       const raw = readFileSync(claudeSettings, "utf-8");
       expect(raw).not.toContain(QUORUM_CLAUDE_COMMAND);
     }
-
     expect(readShadowBranchTip(dir, "quorum/context/v1")).toBe(tipBefore);
   });
 
@@ -114,5 +127,45 @@ describe("quorum init / install / disable", () => {
     writeFileSync(join(dir, ".quorum/local.json"), JSON.stringify({ distill_cli_timeout_seconds: 42 }, null, 2), "utf-8");
     const merged = loadMergedConfig(dir);
     expect(merged.distill_cli_timeout_seconds).toBe(42);
+  });
+
+  it("status reports active hook wiring by agent", () => {
+    const dir = freshGitRepo();
+    runQuorumCapture(dir, ["init"]);
+    const status = runQuorumCapture(dir, ["status"]);
+    expect(status.status).toBe(0);
+    expect(status.stdout).toContain("claude-code: hooked");
+    expect(status.stdout).toContain("cursor: not hooked");
+    expect(status.stdout).toContain("gemini-cli: not hooked");
+    expect(status.stdout).toContain("opencode: not hooked");
+    expect(status.stdout).toContain("codex: not hooked");
+
+    runQuorumCapture(dir, ["disable"]);
+    const after = runQuorumCapture(dir, ["status"]);
+    expect(after.status).toBe(0);
+    expect(after.stdout).toContain("claude-code: not hooked");
+    expect(after.stdout).toContain("cursor: not hooked");
+    expect(after.stdout).toContain("gemini-cli: not hooked");
+    expect(after.stdout).toContain("opencode: not hooked");
+    expect(after.stdout).toContain("codex: not hooked");
+  });
+
+  it("install only wires hooks for agents enabled in config", () => {
+    const dir = freshGitRepo();
+    runQuorumCapture(dir, ["init"]);
+    const cfgPath = join(dir, ".quorum/config.json");
+    const cfg = JSON.parse(readFileSync(cfgPath, "utf-8")) as { agents: string[] };
+    cfg.agents = ["claude-code", "cursor"];
+    writeFileSync(cfgPath, `${JSON.stringify(cfg, null, 2)}\n`, "utf-8");
+
+    runQuorumCapture(dir, ["disable"]);
+    const r = runQuorumCapture(dir, ["install"]);
+    expect(r.status).toBe(0);
+
+    expect(readHookCommands(join(dir, ".claude/settings.json"), "SessionEnd")).toContain(QUORUM_CLAUDE_COMMAND);
+    expect(existsSync(join(dir, ".cursor/settings.json"))).toBe(false);
+    expect(existsSync(join(dir, ".gemini/settings.json"))).toBe(false);
+    expect(existsSync(join(dir, ".opencode/settings.json"))).toBe(false);
+    expect(existsSync(join(dir, ".codex/hooks.json"))).toBe(false);
   });
 });

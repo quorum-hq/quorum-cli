@@ -13,6 +13,7 @@ import { runPin, runPinsList, runUnpin } from "./commands/pins.js";
 import { runReconcile } from "./commands/reconcile.js";
 import { runLog, runShow } from "./commands/log-show.js";
 import { runRetry } from "./commands/retry.js";
+import { runStatus } from "./commands/status.js";
 import { ConfigError } from "./config/validate.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -49,6 +50,7 @@ function usage(): void {
       "       quorum init\n" +
       "       quorum install\n" +
       "       quorum disable\n" +
+      "       quorum status\n" +
       "       quorum checkpoint --agent <id> <transcript-file>\n" +
       "       quorum retry\n" +
       "       quorum reconcile --landing <sha> [--checkpoint <id> ...] [--pr <n>] [--rollup --agent <id> --rollup-transcript <path>]\n" +
@@ -96,6 +98,9 @@ async function main(): Promise<void> {
       case "disable":
         runDisable(gitRoot);
         process.exit(0);
+      case "status":
+        runStatus(gitRoot);
+        process.exit(0);
       case "checkpoint":
         await runCheckpoint(gitRoot, argv.slice(1));
         return;
@@ -129,7 +134,7 @@ async function main(): Promise<void> {
       default:
         eprint(
           `quorum: unknown command "${first}".\n` +
-            "  Try: quorum version | quorum init | quorum checkpoint --agent <id> <file> | quorum retry | quorum brief | quorum log | quorum show <id>",
+            "  Try: quorum version | quorum init | quorum status | quorum checkpoint --agent <id> <file> | quorum retry | quorum brief | quorum log | quorum show <id>",
         );
         process.exit(1);
     }

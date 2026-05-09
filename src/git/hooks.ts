@@ -49,3 +49,12 @@ export function removeQuorumPostRewrite(gitRoot: string): void {
     unlinkSync(path);
   }
 }
+
+export function hasQuorumPostRewrite(gitRoot: string): boolean {
+  const path = postRewritePath(gitRoot);
+  try {
+    return readFileSync(path, "utf-8").includes(QUORUM_HOOK_MARKER);
+  } catch {
+    return false;
+  }
+}

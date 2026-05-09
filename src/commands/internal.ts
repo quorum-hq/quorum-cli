@@ -1,9 +1,10 @@
 import { readFileSync } from "node:fs";
 import { loadMergedConfig } from "../config/load.js";
 import { ConfigError } from "../config/validate.js";
-import { runClaudeSessionEndHook } from "../claude/session-end.js";
+import { runSessionEndHookForAgent } from "../agent-hooks/session-end.js";
 import { ShadowPushFailure } from "../git/shadow-push.js";
 import { runPostRewriteFromStdin } from "../reconcile/run.js";
+import type { AgentId } from "../config/constants.js";
 
 function eprint(msg: string): void {
   process.stderr.write(msg.endsWith("\n") ? msg : `${msg}\n`);
@@ -42,13 +43,21 @@ export async function runInternal(gitRoot: string, argv: string[]): Promise<void
     return;
   }
 
-  if (sub === "claude-session-end") {
+  const agentSessionSubcommands: Record<string, AgentId> = {
+    "claude-session-end": "claude-code",
+    "cursor-session-end": "cursor",
+    "gemini-session-end": "gemini-cli",
+    "opencode-session-end": "opencode",
+    "codex-session-end": "codex",
+  };
+  if (sub && agentSessionSubcommands[sub]) {
+    const agent = agentSessionSubcommands[sub];
     let merged;
     try {
       merged = loadMergedConfig(gitRoot);
     } catch (e) {
       if (e instanceof ConfigError) {
-        eprint(`quorum internal claude-session-end: ${e.message}`);
+        eprint(`quorum internal ${sub}: ${e.message}`);
         process.exit(0);
       }
       throw e;
@@ -60,10 +69,10 @@ export async function runInternal(gitRoot: string, argv: string[]): Promise<void
       stdinText = "";
     }
     try {
-      await runClaudeSessionEndHook(gitRoot, merged, stdinText);
+      await runSessionEndHookForAgent(gitRoot, merged, stdinText, agent);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      eprint(`quorum internal claude-session-end: ${msg}`);
+      eprint(`quorum internal ${sub}: ${msg}`);
     }
     process.exit(0);
     return;

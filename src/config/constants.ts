@@ -6,6 +6,7 @@ export const ALLOWED_AGENT_IDS = [
   "cursor",
   "gemini-cli",
   "opencode",
+  "codex",
 ] as const;
 
 export type AgentId = (typeof ALLOWED_AGENT_IDS)[number];

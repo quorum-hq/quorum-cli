@@ -50,7 +50,17 @@ function pendingDirCount(gitRoot: string): number {
 }
 
 describe("quorum internal claude-session-end", () => {
-  it("captures transcript artifact and commits session checkpoint on success", () => {
+  const sessionEndCommands = [
+    { name: "claude", subcommand: "claude-session-end", lastCaptureName: "claude-code-session-end" },
+    { name: "cursor", subcommand: "cursor-session-end", lastCaptureName: "cursor-session-end" },
+    { name: "gemini-cli", subcommand: "gemini-session-end", lastCaptureName: "gemini-cli-session-end" },
+    { name: "opencode", subcommand: "opencode-session-end", lastCaptureName: "opencode-session-end" },
+    { name: "codex", subcommand: "codex-session-end", lastCaptureName: "codex-session-end" },
+  ] as const;
+
+  it.each(sessionEndCommands)(
+    "captures transcript artifact and commits session checkpoint on success (%s)",
+    ({ subcommand, lastCaptureName }) => {
     const dir = freshGitRepo();
     writeFileSync(join(dir, "README.md"), "# t\n", "utf-8");
     spawnSync("git", ["add", "README.md"], { cwd: dir, stdio: "ignore" });
@@ -65,11 +75,12 @@ describe("quorum internal claude-session-end", () => {
     const payload = JSON.stringify({ transcript_path: "session-transcript.txt" });
     const r = runQuorumCapture(
       dir,
-      ["internal", "claude-session-end"],
+      ["internal", subcommand],
       { QUORUM_DISTILL_WRAPPER: distillStub },
       payload,
     );
     expect(r.status).toBe(0);
+    expect(r.stderr).not.toContain("queued as pending");
     expect(shadowBranchCommitCount(dir, "quorum/context/v1")).toBe(before + 1);
     expect(pendingDirCount(dir)).toBe(0);
 
@@ -77,9 +88,13 @@ describe("quorum internal claude-session-end", () => {
     expect(existsSync(capturesDir)).toBe(true);
     const captureFiles = readdirSync(capturesDir);
     expect(captureFiles.length).toBeGreaterThan(0);
-  });
+    expect(existsSync(join(quorumSessionsDir(dir), `last-${lastCaptureName}.txt`))).toBe(true);
+    },
+  );
 
-  it("writes pending and leaves shadow unchanged on distill failure", () => {
+  it.each(sessionEndCommands)(
+    "writes pending and leaves shadow unchanged on distill failure (%s)",
+    ({ subcommand }) => {
     const dir = freshGitRepo();
     writeFileSync(join(dir, "README.md"), "# t\n", "utf-8");
     spawnSync("git", ["add", "README.md"], { cwd: dir, stdio: "ignore" });
@@ -99,10 +114,43 @@ describe("quorum internal claude-session-end", () => {
 
     const before = shadowBranchCommitCount(dir, "quorum/context/v1");
     const payload = JSON.stringify({ transcript_path: "session-transcript.txt" });
-    const r = runQuorumCapture(dir, ["internal", "claude-session-end"], { QUORUM_DISTILL_WRAPPER: badStub }, payload);
+    const r = runQuorumCapture(dir, ["internal", subcommand], { QUORUM_DISTILL_WRAPPER: badStub }, payload);
     expect(r.status).toBe(0);
     expect(shadowBranchCommitCount(dir, "quorum/context/v1")).toBe(before);
     expect(pendingDirCount(dir)).toBe(1);
     expect(r.stderr).toContain("queued as pending");
+    },
+  );
+
+  it("captures codex stop hook only once per session_id", () => {
+    const dir = freshGitRepo();
+    writeFileSync(join(dir, "README.md"), "# t\n", "utf-8");
+    spawnSync("git", ["add", "README.md"], { cwd: dir, stdio: "ignore" });
+    spawnSync("git", ["commit", "-m", "init"], { cwd: dir, stdio: "ignore" });
+    const head = spawnSync("git", ["rev-parse", "HEAD"], { cwd: dir, encoding: "utf-8" }).stdout?.trim() ?? "";
+
+    runQuorumCapture(dir, ["init"]);
+    writeFileSync(join(dir, "session-transcript.txt"), "fixture transcript", "utf-8");
+    writeFileSync(join(dir, ".quorum-checkpoint-test-head"), `${head}\n`, "utf-8");
+
+    const before = shadowBranchCommitCount(dir, "quorum/context/v1");
+    const payload = JSON.stringify({ transcript_path: "session-transcript.txt", session_id: "codex-s-1" });
+    const r1 = runQuorumCapture(
+      dir,
+      ["internal", "codex-session-end"],
+      { QUORUM_DISTILL_WRAPPER: distillStub },
+      payload,
+    );
+    const r2 = runQuorumCapture(
+      dir,
+      ["internal", "codex-session-end"],
+      { QUORUM_DISTILL_WRAPPER: distillStub },
+      payload,
+    );
+    expect(r1.status).toBe(0);
+    expect(r2.status).toBe(0);
+    expect(shadowBranchCommitCount(dir, "quorum/context/v1")).toBe(before + 1);
+    const capturesDir = join(quorumSessionsDir(dir), "captures");
+    expect(readdirSync(capturesDir).length).toBe(1);
   });
 });

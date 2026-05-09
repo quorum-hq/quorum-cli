@@ -20,6 +20,30 @@ export function claudeSettingsPath(gitRoot: string): string {
   return join(gitRoot, ".claude", "settings.json");
 }
 
+export function cursorSettingsPath(gitRoot: string): string {
+  return join(gitRoot, ".cursor", "settings.json");
+}
+
+export function geminiSettingsPath(gitRoot: string): string {
+  return join(gitRoot, ".gemini", "settings.json");
+}
+
+export function opencodeSettingsPath(gitRoot: string): string {
+  return join(gitRoot, ".opencode", "settings.json");
+}
+
+export function codexSettingsPath(gitRoot: string): string {
+  return join(gitRoot, ".codex", "settings.json");
+}
+
+export function codexHooksPath(gitRoot: string): string {
+  return join(gitRoot, ".codex", "hooks.json");
+}
+
+export function codexConfigTomlPath(gitRoot: string): string {
+  return join(gitRoot, ".codex", "config.toml");
+}
+
 export function quorumSessionsDir(gitRoot: string): string {
   return join(quorumDir(gitRoot), "sessions");
 }
