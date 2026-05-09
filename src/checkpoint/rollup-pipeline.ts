@@ -4,6 +4,7 @@ import type { AgentId, QuorumMergedConfig } from "../config/constants.js";
 import { resolveRollupDistillCommand, ROLLUP_DISTILL_WRAPPER_ENV } from "../distill/resolve-command.js";
 import { spawnDistillerWithTimeout } from "../distill/spawn.js";
 import { extractJsonFromEnvelope, EnvelopeParseError } from "../envelope/extract.js";
+import { maybePushShadowBranchAfterCommit } from "../git/shadow-push.js";
 import { commitCheckpointJsonOnShadowBranch } from "../git/shadow-commit.js";
 import { CheckpointValidationError } from "./session.js";
 import { parseAndNormalizeSquashRollupCheckpoint } from "./squash-rollup.js";
@@ -75,6 +76,7 @@ export async function distillAndCommitSquashRollup(opts: {
     const body = `${JSON.stringify(checkpoint, null, 2)}\n`;
     commitCheckpointJsonOnShadowBranch(opts.gitRoot, opts.merged.shadow_branch, filename, body);
     eprint(`quorum: squash rollup checkpoint committed on ${opts.merged.shadow_branch} as ${filename}`);
+    maybePushShadowBranchAfterCommit(opts.gitRoot, opts.merged);
     return { filename };
   } catch (e) {
     const msg = e instanceof CheckpointValidationError ? e.message : String(e);

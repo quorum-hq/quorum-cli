@@ -7,6 +7,7 @@ import {
   parseCheckpointCliArgs,
   resolveTranscriptPath,
 } from "../checkpoint/pipeline.js";
+import { ShadowPushFailure } from "../git/shadow-push.js";
 
 function eprint(msg: string): void {
   process.stderr.write(msg.endsWith("\n") ? msg : `${msg}\n`);
@@ -59,6 +60,14 @@ export async function runCheckpoint(gitRoot: string, argv: string[]): Promise<vo
     process.exit(1);
   }
 
-  const r = await distillCommitOrPending(gitRoot, agent, transcriptAbs, merged);
-  process.exit(r.ok ? 0 : 1);
+  try {
+    const r = await distillCommitOrPending(gitRoot, agent, transcriptAbs, merged);
+    process.exit(r.ok ? 0 : 1);
+  } catch (e) {
+    if (e instanceof ShadowPushFailure) {
+      eprint(`quorum checkpoint: ${e.message}`);
+      process.exit(1);
+    }
+    throw e;
+  }
 }

@@ -3,6 +3,7 @@ import { parseSessionCheckpointRecord, type SessionCheckpoint } from "../checkpo
 import { normalizeRepoPath } from "../brief/assemble.js";
 import { loadMergedConfig } from "../config/load.js";
 import { ConfigError } from "../config/validate.js";
+import { ShadowPushFailure, maybePushShadowBranchAfterCommit } from "../git/shadow-push.js";
 import { upsertCheckpointJsonOnShadowBranch } from "../git/shadow-commit.js";
 import { listShadowJsonPaths, loadSessionCheckpointsFromShadow, readBlobText } from "../shadow/read-checkpoints.js";
 
@@ -65,6 +66,15 @@ export function runPin(gitRoot: string, argv: string[]): void {
   d.canonical = true;
   const body = `${JSON.stringify(cp, null, 2)}\n`;
   upsertCheckpointJsonOnShadowBranch(gitRoot, merged.shadow_branch, shadowPath, body);
+  try {
+    maybePushShadowBranchAfterCommit(gitRoot, merged);
+  } catch (e) {
+    if (e instanceof ShadowPushFailure) {
+      eprint(`quorum pin: ${e.message}`);
+      process.exit(1);
+    }
+    throw e;
+  }
   eprint(`quorum pin: pinned ${JSON.stringify(decisionId)} in ${shadowPath}`);
   process.exit(0);
 }
@@ -106,6 +116,15 @@ export function runUnpin(gitRoot: string, argv: string[]): void {
   d.canonical = false;
   const body = `${JSON.stringify(cp, null, 2)}\n`;
   upsertCheckpointJsonOnShadowBranch(gitRoot, merged.shadow_branch, shadowPath, body);
+  try {
+    maybePushShadowBranchAfterCommit(gitRoot, merged);
+  } catch (e) {
+    if (e instanceof ShadowPushFailure) {
+      eprint(`quorum unpin: ${e.message}`);
+      process.exit(1);
+    }
+    throw e;
+  }
   eprint(`quorum unpin: unpinned ${JSON.stringify(decisionId)} in ${shadowPath}`);
   process.exit(0);
 }

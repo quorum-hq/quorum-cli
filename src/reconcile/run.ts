@@ -4,6 +4,7 @@ import type { SessionCheckpoint } from "../checkpoint/session.js";
 import { distillAndCommitSquashRollup } from "../checkpoint/rollup-pipeline.js";
 import { loadSessionCheckpointsFromShadow } from "../shadow/read-checkpoints.js";
 import { upsertCheckpointJsonOnShadowBranch } from "../git/shadow-commit.js";
+import { maybePushShadowBranchAfterCommit } from "../git/shadow-push.js";
 import { serializeRewriteManifest, type RewriteManifestV1 } from "./manifest.js";
 import { parseReconcileArgs, type ReconcileCliArgs } from "./parse-args.js";
 
@@ -121,6 +122,7 @@ export async function runReconcileCli(gitRoot: string, merged: QuorumMergedConfi
   const manifest = buildRewriteManifestFromReconcile(parsed, allSessions);
   const path = commitRewriteManifest(gitRoot, merged.shadow_branch, manifest);
   process.stderr.write(`quorum: rewrite manifest written on ${merged.shadow_branch} as ${path}\n`);
+  maybePushShadowBranchAfterCommit(gitRoot, merged);
 
   if (parsed.rollup) {
     const transcriptAbs = resolve(process.cwd(), parsed.rollup.transcript);
@@ -145,5 +147,6 @@ export function runPostRewriteFromStdin(gitRoot: string, merged: QuorumMergedCon
   for (const m of manifests) {
     const path = commitRewriteManifest(gitRoot, merged.shadow_branch, m);
     process.stderr.write(`quorum: post-rewrite manifest on ${merged.shadow_branch} as ${path}\n`);
+    maybePushShadowBranchAfterCommit(gitRoot, merged);
   }
 }

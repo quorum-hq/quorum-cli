@@ -1,6 +1,7 @@
 import { loadMergedConfig } from "../config/load.js";
 import { ConfigError } from "../config/validate.js";
 import { distillCommitOrPending } from "../checkpoint/pipeline.js";
+import { ShadowPushFailure } from "../git/shadow-push.js";
 import {
   findLatestPendingId,
   readPendingMeta,
@@ -39,12 +40,20 @@ export async function runRetry(gitRoot: string): Promise<void> {
   }
 
   const transcriptAbs = transcriptPathForPending(gitRoot, pendingId);
-  const r = await distillCommitOrPending(gitRoot, meta.agent, transcriptAbs, merged, {
-    replacePendingId: pendingId,
-  });
-  if (r.ok) {
-    removePendingDir(gitRoot, pendingId);
-    process.exit(0);
+  try {
+    const r = await distillCommitOrPending(gitRoot, meta.agent, transcriptAbs, merged, {
+      replacePendingId: pendingId,
+    });
+    if (r.ok) {
+      removePendingDir(gitRoot, pendingId);
+      process.exit(0);
+    }
+    process.exit(1);
+  } catch (e) {
+    if (e instanceof ShadowPushFailure) {
+      eprint(`quorum retry: ${e.message}`);
+      process.exit(1);
+    }
+    throw e;
   }
-  process.exit(1);
 }

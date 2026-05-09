@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { loadMergedConfig } from "../config/load.js";
 import { ConfigError } from "../config/validate.js";
+import { ShadowPushFailure } from "../git/shadow-push.js";
 import { runPostRewriteFromStdin } from "../reconcile/run.js";
 
 function eprint(msg: string): void {
@@ -29,8 +30,12 @@ export function runInternal(gitRoot: string, argv: string[]): void {
     try {
       runPostRewriteFromStdin(gitRoot, merged, stdinText);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      eprint(`quorum internal post-rewrite: ${msg}`);
+      if (e instanceof ShadowPushFailure) {
+        eprint(`quorum internal post-rewrite: ${e.message}`);
+      } else {
+        const msg = e instanceof Error ? e.message : String(e);
+        eprint(`quorum internal post-rewrite: ${msg}`);
+      }
     }
     process.exit(0);
     return;

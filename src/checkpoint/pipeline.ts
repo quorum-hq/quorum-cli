@@ -8,6 +8,7 @@ import { parseAndNormalizeSessionCheckpoint, CheckpointValidationError } from ".
 import { extractJsonFromEnvelope, EnvelopeParseError } from "../envelope/extract.js";
 import { resolveDistillCommand } from "../distill/resolve-command.js";
 import { spawnDistillerWithTimeout } from "../distill/spawn.js";
+import { maybePushShadowBranchAfterCommit } from "../git/shadow-push.js";
 import { commitCheckpointJsonOnShadowBranch } from "../git/shadow-commit.js";
 import { writePendingCapture, removePendingDir } from "../sessions/pending.js";
 
@@ -111,6 +112,7 @@ export async function distillCommitOrPending(
     const body = `${JSON.stringify(checkpoint, null, 2)}\n`;
     commitCheckpointJsonOnShadowBranch(gitRoot, merged.shadow_branch, filename, body);
     eprint(`quorum: checkpoint committed on ${merged.shadow_branch} as ${filename}`);
+    maybePushShadowBranchAfterCommit(gitRoot, merged);
     return { ok: true, filename };
   } catch (e) {
     const msg = e instanceof CheckpointValidationError ? e.message : String(e);

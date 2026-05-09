@@ -1,5 +1,6 @@
 import { loadMergedConfig } from "../config/load.js";
 import { ConfigError } from "../config/validate.js";
+import { ShadowPushFailure } from "../git/shadow-push.js";
 import { runReconcileCli } from "../reconcile/run.js";
 
 function eprint(msg: string): void {
@@ -20,6 +21,10 @@ export async function runReconcile(gitRoot: string, argv: string[]): Promise<voi
   try {
     await runReconcileCli(gitRoot, merged, argv);
   } catch (e) {
+    if (e instanceof ShadowPushFailure) {
+      eprint(`quorum reconcile: ${e.message}`);
+      process.exit(1);
+    }
     const msg = e instanceof Error ? e.message : String(e);
     eprint(`quorum reconcile: ${msg}`);
     eprint(
