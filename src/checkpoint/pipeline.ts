@@ -35,7 +35,7 @@ export async function distillCommitOrPending(
   }).trim();
 
   const timeoutMs = merged.distill_cli_timeout_seconds * 1000;
-  const { command, args } = resolveDistillCommand(agent, transcriptAbs);
+  const { command, args } = resolveDistillCommand(agent, transcriptAbs, headSha);
   const spawnRes = await spawnDistillerWithTimeout({
     command,
     args,

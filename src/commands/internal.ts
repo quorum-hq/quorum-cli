@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { loadMergedConfig } from "../config/load.js";
 import { ConfigError } from "../config/validate.js";
+import { runClaudeSessionEndHook } from "../claude/session-end.js";
 import { ShadowPushFailure } from "../git/shadow-push.js";
 import { runPostRewriteFromStdin } from "../reconcile/run.js";
 
@@ -8,7 +9,7 @@ function eprint(msg: string): void {
   process.stderr.write(msg.endsWith("\n") ? msg : `${msg}\n`);
 }
 
-export function runInternal(gitRoot: string, argv: string[]): void {
+export async function runInternal(gitRoot: string, argv: string[]): Promise<void> {
   const sub = argv[0];
   if (sub === "post-rewrite") {
     let merged;
@@ -36,6 +37,33 @@ export function runInternal(gitRoot: string, argv: string[]): void {
         const msg = e instanceof Error ? e.message : String(e);
         eprint(`quorum internal post-rewrite: ${msg}`);
       }
+    }
+    process.exit(0);
+    return;
+  }
+
+  if (sub === "claude-session-end") {
+    let merged;
+    try {
+      merged = loadMergedConfig(gitRoot);
+    } catch (e) {
+      if (e instanceof ConfigError) {
+        eprint(`quorum internal claude-session-end: ${e.message}`);
+        process.exit(0);
+      }
+      throw e;
+    }
+    let stdinText = "";
+    try {
+      stdinText = readFileSync(0, "utf-8");
+    } catch {
+      stdinText = "";
+    }
+    try {
+      await runClaudeSessionEndHook(gitRoot, merged, stdinText);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      eprint(`quorum internal claude-session-end: ${msg}`);
     }
     process.exit(0);
     return;

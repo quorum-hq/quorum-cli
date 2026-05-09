@@ -106,7 +106,7 @@ async function main(): Promise<void> {
         await runReconcile(gitRoot, argv.slice(1));
         return;
       case "internal":
-        runInternal(gitRoot, argv.slice(1));
+        await runInternal(gitRoot, argv.slice(1));
         return;
       case "brief":
         runBrief(gitRoot, argv.slice(1));

@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { QUORUM_CLAUDE_COMMAND } from "../src/claude/hooks.js";
 import { loadMergedConfig } from "../src/config/load.js";
 import { parseAndValidateCommittedConfig } from "../src/config/validate.js";
 import { readShadowBranchTip } from "../src/git/shadow-branch.js";
@@ -77,6 +78,15 @@ describe("quorum init / install / disable", () => {
     const hook = join(dir, ".git/hooks/post-rewrite");
     expect(existsSync(hook)).toBe(true);
     expect(readFileSync(hook, "utf-8")).toContain(QUORUM_HOOK_MARKER);
+
+    const claudeSettings = join(dir, ".claude/settings.json");
+    expect(existsSync(claudeSettings)).toBe(true);
+    const raw = JSON.parse(readFileSync(claudeSettings, "utf-8")) as {
+      hooks?: { SessionEnd?: Array<{ hooks?: Array<{ command?: string }> }> };
+    };
+    const commands =
+      raw.hooks?.SessionEnd?.flatMap((entry) => (entry.hooks ?? []).map((h) => h.command ?? "")) ?? [];
+    expect(commands).toContain(QUORUM_CLAUDE_COMMAND);
   });
 
   it("disable removes Quorum post-rewrite hook; shadow branch remains", () => {
@@ -89,6 +99,11 @@ describe("quorum init / install / disable", () => {
     const dis = runQuorumCapture(dir, ["disable"]);
     expect(dis.status).toBe(0);
     expect(existsSync(hook)).toBe(false);
+    const claudeSettings = join(dir, ".claude/settings.json");
+    if (existsSync(claudeSettings)) {
+      const raw = readFileSync(claudeSettings, "utf-8");
+      expect(raw).not.toContain(QUORUM_CLAUDE_COMMAND);
+    }
 
     expect(readShadowBranchTip(dir, "quorum/context/v1")).toBe(tipBefore);
   });

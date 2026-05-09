@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { loadMergedConfig } from "../config/load.js";
 import { ConfigError, parseAndValidateLocalOverrides } from "../config/validate.js";
+import { installClaudeSessionEndHook } from "../claude/hooks.js";
 import { ensureQuorumGitignoreBlock } from "../git/gitignore.js";
 import { installPostRewriteStub } from "../git/hooks.js";
 import { quorumConfigPath, quorumDir, quorumLocalPath } from "../paths.js";
@@ -51,6 +52,12 @@ export function runInstall(gitRoot: string): void {
 
   if (merged.install_git_rewrite_hook) {
     const r = installPostRewriteStub(gitRoot);
+    if (r.skipped && r.reason) {
+      eprint(`quorum install: ${r.reason}`);
+    }
+  }
+  if (merged.agents.includes("claude-code")) {
+    const r = installClaudeSessionEndHook(gitRoot);
     if (r.skipped && r.reason) {
       eprint(`quorum install: ${r.reason}`);
     }

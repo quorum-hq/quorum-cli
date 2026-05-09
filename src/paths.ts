@@ -16,6 +16,10 @@ export function gitHooksDir(gitRoot: string): string {
   return join(gitRoot, ".git", "hooks");
 }
 
+export function claudeSettingsPath(gitRoot: string): string {
+  return join(gitRoot, ".claude", "settings.json");
+}
+
 export function quorumSessionsDir(gitRoot: string): string {
   return join(quorumDir(gitRoot), "sessions");
 }

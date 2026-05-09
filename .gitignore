@@ -3,3 +3,8 @@
 docs/agents/
 node_modules/
 dist/
+
+# --- Quorum (managed by quorum init; do not remove) ---
+.quorum/local.json
+.quorum/sessions/
+# --- end Quorum ---
