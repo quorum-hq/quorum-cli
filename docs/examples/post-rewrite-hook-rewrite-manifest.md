@@ -1,14 +1,28 @@
 # Post-rewrite hook → rewrite manifest (local e2e)
 
-This example walks through what happens in a **small repo** after **`quorum init`**, a few **`quorum checkpoint`** runs, and a **history rewrite** (`git commit --amend` or rebase). It matches the kind of **`quorum log`** output where you see a **`kind: rewrite`** entry **above** session rows whose **`commit`** still shows an **older** SHA.
-
-The **`post-rewrite` Git hook** is the mechanism: Git runs it after certain rewrites and feeds **`<old-sha> <new-sha>`** lines on stdin; Quorum turns that into **`rewrite/<landing>.json`** on the shadow branch so **`quorum brief`** can keep using those checkpoint ids at the new **`HEAD`**.
+This example walks through what happens in a **small repo** after **`quorum init`**, enabling the rewrite hook, a few **`quorum checkpoint`** runs, and a **history rewrite** (`git commit --amend` or rebase). It matches the kind of **`quorum log`** output where you see a **`kind: rewrite`** entry **above** session rows whose **`commit`** still shows an **older** SHA.
 
 ---
 
-## What the `post-rewrite` hook is (installed by `quorum init`)
+## Problem, and two ways to fix it
 
-Quorum installs **`.git/hooks/post-rewrite`** when it can (see `src/git/hooks.ts`). The file looks like this:
+**Problem:** Session checkpoints on the shadow branch store **`commit_sha`**. After Git **rewrites** history, those SHAs may no longer be ancestors of **`HEAD`**, so **`quorum brief`** stops linking prior decisions until Quorum records which checkpoints were **absorbed** into the new landing commit (**`rewrite/<landing>.json`**).
+
+**Fix A — local rewrites (amend, rebase):** Turn on **`install_git_rewrite_hook`** in **`.quorum/config.json`**, run **`quorum install`**, and keep **`quorum`** on **`PATH`**. Git then runs **`post-rewrite`**; Quorum maps **`old_sha new_sha`** lines from stdin into rewrite manifests (this document).
+
+**Fix B — GitHub squash merge:** History changes on the server; your laptop’s hooks never run there. After merge, run **`quorum reconcile --landing <merge_commit_sha> --pr <n>`** (manually or in CI). Example workflow: [quorum-reconcile-squash-merge.yml](quorum-reconcile-squash-merge.yml).
+
+---
+
+## Enabling the `post-rewrite` hook
+
+By default **`install_git_rewrite_hook`** is **`false`** so **`quorum init`** does not touch **`.git/hooks/post-rewrite`** until you opt in. Set **`"install_git_rewrite_hook": true`** in **`.quorum/config.json`**, then run **`quorum install`** (or **`quorum init`** on a fresh repo after editing the generated config). **`quorum status`** should show **`post-rewrite: hooked`**.
+
+---
+
+## What the hook file is
+
+Quorum may install **`.git/hooks/post-rewrite`** when **`install_git_rewrite_hook`** is on and the slot is free or already Quorum-owned (see `src/git/hooks.ts`). The file looks like this:
 
 ```sh
 #!/bin/sh
@@ -32,6 +46,7 @@ That is the same **rewrite manifest** shape you get from **`quorum reconcile --l
 ## Prerequisites
 
 - **`quorum init`** has been run in the repo (`.quorum/` and shadow branch exist).
+- **`install_git_rewrite_hook`** is **`true`** and **`quorum install`** has been run so **`post-rewrite`** is present.
 - **`quorum`** is on **`PATH`** when Git runs hooks (otherwise the hook no-ops).
 - **`quorum status`** reports **`post-rewrite: hooked`** (and optionally **`claude-code: hooked`** if you use SessionEnd capture).
 
@@ -46,7 +61,7 @@ test -f .git/hooks/post-rewrite && grep -q quorum-managed .git/hooks/post-rewrit
 
 ## Example flow (manual checkpoints + amend)
 
-Assume you already committed something (e.g. **`README.md`**) and ran **`quorum init`**.
+Assume you already committed something (e.g. **`README.md`**) and ran **`quorum init`**. Turn on **`install_git_rewrite_hook`** in **`.quorum/config.json`** and run **`quorum install`** so **`post-rewrite`** is wired.
 
 1. **Create transcripts** (under `notes/`, `docs2/`, etc.) and distill them into session checkpoints tied to **current `HEAD`**:
 
@@ -104,7 +119,7 @@ quorum reconcile --landing "$LANDING" --checkpoint "<checkpoint-id>"
 # and/or:  --pr <n>
 ```
 
-See also [manual transcript + checkpoint](manual-transcript-checkpoint.md) and the squash-merge workflow [quorum-reconcile-squash-merge.yml](quorum-reconcile-squash-merge.yml) for CI-style **`quorum reconcile`**.
+See also [manual transcript + checkpoint](manual-transcript-checkpoint.md) for scripted **`quorum reconcile`** / checkpoint flows, and [quorum-reconcile-squash-merge.yml](quorum-reconcile-squash-merge.yml) for a GitHub Actions **`reconcile`** example after squash merge.
 
 ---
 

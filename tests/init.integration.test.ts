@@ -23,6 +23,13 @@ function freshGitRepo(): string {
   return dir;
 }
 
+function setInstallGitRewriteHook(dir: string, value: boolean): void {
+  const cfgPath = join(dir, ".quorum/config.json");
+  const cfg = JSON.parse(readFileSync(cfgPath, "utf-8")) as { install_git_rewrite_hook?: boolean };
+  cfg.install_git_rewrite_hook = value;
+  writeFileSync(cfgPath, `${JSON.stringify(cfg, null, 2)}\n`, "utf-8");
+}
+
 function runQuorumCapture(cwd: string, args: string[]): { stdout: string; stderr: string; status: number } {
   const r = spawnSync(process.execPath, [cliEntry, ...args], {
     cwd,
@@ -80,17 +87,21 @@ describe("quorum init / install / disable", () => {
     expect(tip2).toBe(tip1);
   });
 
-  it("install fails without config; succeeds after init and installs hook", () => {
+  it("install fails without config; post-rewrite installs only when install_git_rewrite_hook is true", () => {
     const dir = freshGitRepo();
     const missing = runQuorumCapture(dir, ["install"]);
     expect(missing.status).toBe(1);
     expect(missing.stderr).toContain("config.json");
 
     runQuorumCapture(dir, ["init"]);
+    const firstInstall = runQuorumCapture(dir, ["install"]);
+    expect(firstInstall.status).toBe(0);
+    const hook = join(dir, ".git/hooks/post-rewrite");
+    expect(existsSync(hook)).toBe(false);
+
+    setInstallGitRewriteHook(dir, true);
     const ok = runQuorumCapture(dir, ["install"]);
     expect(ok.status).toBe(0);
-
-    const hook = join(dir, ".git/hooks/post-rewrite");
     expect(existsSync(hook)).toBe(true);
     expect(readFileSync(hook, "utf-8")).toContain(QUORUM_HOOK_MARKER);
 
@@ -108,6 +119,8 @@ describe("quorum init / install / disable", () => {
   it("disable removes Quorum post-rewrite hook; shadow branch remains", () => {
     const dir = freshGitRepo();
     runQuorumCapture(dir, ["init"]);
+    setInstallGitRewriteHook(dir, true);
+    expect(runQuorumCapture(dir, ["install"]).status).toBe(0);
     const tipBefore = readShadowBranchTip(dir, "quorum/context/v1");
     const hook = join(dir, ".git/hooks/post-rewrite");
     expect(existsSync(hook)).toBe(true);
@@ -134,6 +147,13 @@ describe("quorum init / install / disable", () => {
   it("status reports active hook wiring by agent", () => {
     const dir = freshGitRepo();
     runQuorumCapture(dir, ["init"]);
+    const statusInit = runQuorumCapture(dir, ["status"]);
+    expect(statusInit.status).toBe(0);
+    expect(statusInit.stdout).toContain("post-rewrite: not hooked");
+    expect(statusInit.stdout).toContain("claude-code: hooked");
+
+    setInstallGitRewriteHook(dir, true);
+    expect(runQuorumCapture(dir, ["install"]).status).toBe(0);
     const status = runQuorumCapture(dir, ["status"]);
     expect(status.status).toBe(0);
     expect(status.stdout).toContain("post-rewrite: hooked");

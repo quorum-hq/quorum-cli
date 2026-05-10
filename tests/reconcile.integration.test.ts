@@ -22,6 +22,13 @@ function freshGitRepo(): string {
   return dir;
 }
 
+function setInstallGitRewriteHook(dir: string, value: boolean): void {
+  const cfgPath = join(dir, ".quorum/config.json");
+  const cfg = JSON.parse(readFileSync(cfgPath, "utf-8")) as Record<string, unknown>;
+  cfg.install_git_rewrite_hook = value;
+  writeFileSync(cfgPath, `${JSON.stringify(cfg, null, 2)}\n`, "utf-8");
+}
+
 function runQuorumCapture(
   cwd: string,
   args: string[],
@@ -414,6 +421,8 @@ exit 0
       spawnSync("git", ["rev-parse", "HEAD"], { cwd: dir, encoding: "utf-8" }).stdout?.trim() ?? "";
 
     runQuorumCapture(dir, ["init"]);
+    setInstallGitRewriteHook(dir, true);
+    expect(runQuorumCapture(dir, ["install"]).status).toBe(0);
     writeFileSync(join(dir, "transcript.txt"), "stub", "utf-8");
     writeFileSync(join(dir, ".quorum-checkpoint-test-head"), `${head}\n`, "utf-8");
     runQuorumCapture(dir, ["checkpoint", "--agent", "claude-code", "transcript.txt"], {

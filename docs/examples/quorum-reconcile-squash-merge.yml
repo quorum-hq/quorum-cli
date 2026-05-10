@@ -1,10 +1,32 @@
-# Copy into `.github/workflows/` and adjust checkout/install steps for your repo layout.
+# Copy into `.github/workflows/` and tune checkout / install for your layout.
 #
-# Rollup-only CI exception (no agent CLI on the runner): set QUORUM_ROLLUP_DISTILL_WRAPPER to an
-# executable that prints <<QUORUM_JSON>> … <<END_QUORUM_JSON>> with valid squash_rollup JSON whose
-# commit_sha matches --landing. Example harness: tests/fixtures/rollup-distill-stub.mjs in this repo.
+# --- Problem ---
+# Session checkpoints on Quorum's shadow branch record git commit SHAs. After a
+# squash merge on GitHub, those SHAs may no longer be ancestors of main's HEAD,
+# so `quorum brief` can lose linkage until Quorum knows the new "landing" commit
+# absorbed those checkpoints.
 #
-# Optional secret (alternative to repo/env configuration): pass the wrapper path or script body via env.
+# --- Two fixes ---
+# (1) Local rewrites (amend, rebase): enable `install_git_rewrite_hook` in
+#     `.quorum/config.json`, run `quorum install`, and keep `quorum` on PATH.
+#     Git runs `post-rewrite`; Quorum writes `rewrite/<new-sha>.json` automatically.
+#     See docs/examples/post-rewrite-hook-rewrite-manifest.md
+# (2) GitHub squash merge (history rewritten on the server): hooks do not run
+#     there. After merge, run `quorum reconcile --landing <merge_commit_sha> --pr <n>`
+#     (this workflow), or run the same command locally after pulling main.
+#
+# --- This workflow ---
+# Assumes this repository *is* the quorum-enabled app (npm package at repo root).
+# If quorum-cli is an npm dependency instead, replace the build step with your
+# install path and invoke `node node_modules/quorum-cli/dist/cli.js reconcile …`
+# (or `npx quorum reconcile …` when the bin is on PATH).
+#
+# Rollup (optional): add `--rollup --agent claude-code --rollup-transcript <file>`
+# and set secret `QUORUM_ROLLUP_DISTILL_WRAPPER` for CI-only distillation; see README.
+#
+# Rollup-only CI exception: set QUORUM_ROLLUP_DISTILL_WRAPPER to an executable that
+# prints <<QUORUM_JSON>> … <<END_QUORUM_JSON>> with valid squash_rollup JSON whose
+# commit_sha matches --landing. Example harness: tests/fixtures/rollup-distill-stub.mjs
 
 name: quorum-reconcile-squash-merge
 
@@ -28,24 +50,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
+          cache: npm
 
-      # Example: quorum-cli lives in-repo; replace with npm install -g or published package.
-      - name: Install quorum CLI
-        working-directory: ./path/to/quorum-cli
+      - name: Install dependencies and build CLI
         run: npm ci && npm run build
 
-      - name: Rewrite manifest + optional rollup checkpoint
-        working-directory: ${{ github.workspace }}
-        env:
-          QUORUM_ROLLUP_DISTILL_WRAPPER: ${{ secrets.QUORUM_ROLLUP_DISTILL_WRAPPER }}
+      - name: Quorum reconcile (rewrite manifest for squash merge)
         run: |
           set -euo pipefail
           LANDING="${{ github.event.pull_request.merge_commit_sha }}"
           PR="${{ github.event.pull_request.number }}"
-          CLI="${{ github.workspace }}/path/to/quorum-cli/dist/cli.js"
-          node "$CLI" reconcile \
+          node "${{ github.workspace }}/dist/cli.js" reconcile \
             --landing "$LANDING" \
-            --pr "$PR" \
-            --rollup \
-            --agent claude-code \
-            --rollup-transcript path/to/rollup-transcript.md
+            --pr "$PR"

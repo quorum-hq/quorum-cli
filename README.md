@@ -4,7 +4,7 @@ We make your next agent session start with everything it needs to know automatic
 
 ## Documentation
 
-- **Squash-merge reconcile (GitHub Actions):** copy [`docs/examples/quorum-reconcile-squash-merge.yml`](docs/examples/quorum-reconcile-squash-merge.yml) into `.github/workflows/` and adjust paths. The workflow comments list required inputs and the CI-only rollup hook.
+- **Rewrites & squash merges:** [post-rewrite hook → rewrite manifest](docs/examples/post-rewrite-hook-rewrite-manifest.md) (local Git). For GitHub after merge, copy [`docs/examples/quorum-reconcile-squash-merge.yml`](docs/examples/quorum-reconcile-squash-merge.yml) into `.github/workflows/` and adjust install paths if quorum is not at the repo root.
 
 ## Agent invoke matrix (v0.1)
 

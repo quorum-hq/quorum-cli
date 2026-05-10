@@ -54,6 +54,7 @@ export const DEFAULT_COMMITTED_CONFIG: QuorumCommittedConfig = {
   agents: ["claude-code"],
   distill_cli_timeout_seconds: 900,
   rollup_on_reconcile: false,
-  install_git_rewrite_hook: true,
+  /** Off by default: touching `.git/hooks` surprises some teams; opt in via config + `quorum install`. */
+  install_git_rewrite_hook: false,
   auto_push: false,
 };
