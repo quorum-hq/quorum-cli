@@ -2,10 +2,24 @@
   "name": "quorum-cli",
   "version": "0.1.0",
   "description": "Quorum CLI",
+  "license": "MIT",
   "type": "module",
   "bin": {
     "quorum": "./dist/cli.js"
   },
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/quorum-hq/quorum-cli.git"
+  },
+  "bugs": {
+    "url": "https://github.com/quorum-hq/quorum-cli/issues"
+  },
+  "homepage": "https://github.com/quorum-hq/quorum-cli#readme",
   "scripts": {
     "build": "tsc",
     "test": "npm run build && vitest run"

@@ -13,7 +13,7 @@
 
 It captures what your team already decided and carries that context forward so agents stop restarting from zero.
 
-`BETA` `OPEN SOURCE` `TEAM MEMORY` `ENGINEER-BUILT`
+`BETA` `OPEN SOURCE` `TEAM MEMORY`
 
 ## Real pain points this solves
 
@@ -65,6 +65,46 @@ npm install -g quorum-cli
 
 Requires Node.js `>=20` and git.
 
+**Platform support (v0.1):**
+
+- macOS: supported
+- Linux: supported
+- Windows: not supported in v0.1
+
+## Command name and version semantics
+
+Quorum installs the `quorum` binary.
+
+If `quorum` already exists on your machine, check resolution order:
+
+```bash
+which -a quorum
+```
+
+If another binary comes first, run Quorum through npm exec:
+
+```bash
+npx quorum-cli version
+```
+
+`quorum version` reports the installed CLI artifact version (the package version you installed), so it is the canonical check for release/debug reports.
+
+## Quick start (automatic flow)
+
+```bash
+# initialize once per repo
+quorum init
+
+# check hooks + health
+quorum status
+
+# after regular coding sessions, ask for focused context
+quorum brief src/
+
+# run with context
+quorum brief src/ | claude
+```
+
 ## Capabilities in v0.1
 
 ### Capture and memory pipeline
@@ -93,6 +133,42 @@ Pins are not just bookmarks. They are how teams encode architectural rules that 
 - With pins, critical constraints stay in every relevant brief, reducing architectural drift.
 - In the larger Quorum vision, pins are the durable contract layer between team intent and agent execution.
 
+## Pinning decisions (and why teams should use it)
+
+Pinning is how you convert one good decision into a repeatable team guardrail.
+
+When a decision is pinned, Quorum treats it as canonical memory for future brief assembly on relevant files. This is especially useful for security constraints, architecture boundaries, migration rules, and "do not change" decisions.
+
+Advantages:
+
+- prevents important rules from being drowned out by newer but less important context
+- keeps cross-session and cross-teammate behavior consistent
+- reduces re-litigation of already-settled technical decisions
+- gives agents a stable baseline before they start generating code
+
+Example flow:
+
+```bash
+# Find recent checkpoints and decisions
+quorum log
+quorum show <checkpoint-id>
+
+# Pin a decision from that checkpoint
+quorum pin <checkpoint-id> <decision-id>
+
+# Verify current canonical pins
+quorum pins
+
+# Use brief with pinned context included
+quorum brief src/auth/ | claude
+```
+
+If a rule changes later, remove the old pin and replace it with the updated decision:
+
+```bash
+quorum unpin <checkpoint-id> <decision-id>
+```
+
 ## How the system works
 
 ```text
@@ -112,21 +188,42 @@ next session starts
 
 Operationally: this keeps context in git-native artifacts, not in ad-hoc chat history.
 
-## Quick start (automatic flow)
+## Command reference (v0.1)
 
-```bash
-# initialize once per repo
-quorum init
+Use `quorum --help` for full syntax and flags. The core command surface:
 
-# check hooks + health
-quorum status
+### Setup and lifecycle
 
-# after regular coding sessions, ask for focused context
-quorum brief src/
+- `quorum init` - bootstrap Quorum in the current repo (config + shadow branch + hooks)
+- `quorum install` - install hooks for an already-configured repo/clone
+- `quorum status` - show current hook and setup health
+- `quorum disable` - remove Quorum-managed hooks without deleting stored context
+- `quorum version` - print installed CLI artifact version
 
-# run with context
-quorum brief src/ | claude
-```
+### Capture and recovery
+
+- `quorum checkpoint --agent <id> <transcript-path>` - distill a transcript into a structured checkpoint
+- `quorum retry` - retry the latest failed/pending distillation
+
+### Brief and context retrieval
+
+- `quorum brief [path]` - assemble focused context for the path/module you are about to work on
+
+### Canonical decisions (pins)
+
+- `quorum pin <checkpoint-id> <decision-id>` - mark a decision as canonical
+- `quorum unpin <checkpoint-id> <decision-id>` - remove canonical status from a decision
+- `quorum pins` - list currently pinned canonical decisions
+
+### History, rewrite, and inspection
+
+- `quorum reconcile --landing <sha> ...` - bridge rewritten history (squash/rebase) back to existing checkpoints
+- `quorum log [path]` - list checkpoint/manifest history, optionally path-filtered
+- `quorum show <id-or-landing-sha>` - inspect a specific checkpoint or rewrite manifest
+
+### Internal hooks
+
+- `quorum internal ...` - hook entrypoints used by Quorum itself (not intended for normal interactive usage)
 
 ## Limitations right now
 
@@ -139,6 +236,7 @@ Broader first-class agent support is planned in future versions.
 
 ## Docs and examples
 
+- [Architecture deep dive (shadow branch, capture/retrieval, reconcile)](docs/examples/architecture.md)
 - [Developer setup (`config.json` vs `local.json`, `init` vs `install`)](docs/examples/developer-setup.md)
 - [Post-rewrite hook -> rewrite manifest walkthrough](docs/examples/post-rewrite-hook-rewrite-manifest.md)
 - [Distill wrapper guide (`QUORUM_DISTILL_WRAPPER`)](docs/examples/quorum-distill-wrapper.md)
@@ -149,6 +247,13 @@ Broader first-class agent support is planned in future versions.
 `quorum-cli` is the shipping primitive for a larger multiplayer workspace direction.
 
 Full vision: [quorum-hq.github.io](https://quorum-hq.github.io)
+
+## Homebrew status
+
+Homebrew distribution is planned but not published yet.
+
+- Current install path: `npm install -g quorum-cli`
+- Future path: official tap/formula docs will be added here when released
 
 ## Beta status
 
