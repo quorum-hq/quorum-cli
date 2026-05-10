@@ -5,6 +5,7 @@ import { loadMergedConfig } from "../config/load.js";
 import { ConfigError } from "../config/validate.js";
 import { ShadowPushFailure, maybePushShadowBranchAfterCommit } from "../git/shadow-push.js";
 import { upsertCheckpointJsonOnShadowBranch } from "../git/shadow-commit.js";
+import { prepareForDistilledReads, stripNoWaitFlag } from "../read-side/prepare-distilled-read.js";
 import { listShadowJsonPaths, loadSessionCheckpointsFromShadow, readBlobText } from "../shadow/read-checkpoints.js";
 
 function eprint(msg: string): void {
@@ -141,7 +142,16 @@ function pathPrefixGroup(filesTouched: string[]): string {
   return `${first.slice(0, slash + 1)}`;
 }
 
-export function runPinsList(gitRoot: string): void {
+export async function runPinsList(gitRoot: string, argv: string[]): Promise<void> {
+  const { argv: rest, noWait } = stripNoWaitFlag(argv);
+  if (rest.length > 0) {
+    eprint(`quorum pins: unexpected argument(s): ${rest.map((a) => JSON.stringify(a)).join(", ")}`);
+    eprint("  Usage: quorum pins [--no-wait]");
+    process.exit(1);
+  }
+
+  await prepareForDistilledReads(gitRoot, { noWait });
+
   let merged;
   try {
     merged = loadMergedConfig(gitRoot);

@@ -1,6 +1,10 @@
 /** Empty git tree object id (universal). */
 export const GIT_EMPTY_TREE_SHA = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 
+// TODO: When cursor / gemini-cli / opencode / codex are first-class in this release line, consider
+// adding them to DEFAULT_COMMITTED_CONFIG.agents (and expanding status output) — code paths stay
+// available for manual config + QUORUM_DISTILL_WRAPPER until then.
+
 export const ALLOWED_AGENT_IDS = [
   "claude-code",
   "cursor",
@@ -46,7 +50,8 @@ export type QuorumMergedConfig = QuorumCommittedConfig;
 export const DEFAULT_COMMITTED_CONFIG: QuorumCommittedConfig = {
   shadow_branch: "quorum/context/v1",
   default_token_budget: 4000,
-  agents: [...ALLOWED_AGENT_IDS],
+  /** v0.1: only Claude has supported auto-capture hooks; add other ids here to opt into experimental distill paths. */
+  agents: ["claude-code"],
   distill_cli_timeout_seconds: 900,
   rollup_on_reconcile: false,
   install_git_rewrite_hook: true,

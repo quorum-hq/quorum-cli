@@ -10,6 +10,7 @@ import { DISTILL_CHILD_ENV, resolveDistillCommand } from "../distill/resolve-com
 import { spawnDistillerWithTimeout } from "../distill/spawn.js";
 import { maybePushShadowBranchAfterCommit } from "../git/shadow-push.js";
 import { commitCheckpointJsonOnShadowBranch } from "../git/shadow-commit.js";
+import { registerDistillInflight, unregisterDistillInflight } from "../sessions/distill-inflight.js";
 import { writePendingCapture, removePendingDir } from "../sessions/pending.js";
 
 function eprint(msg: string): void {
@@ -23,6 +24,21 @@ export type DistillPipelineOptions = {
 };
 
 export async function distillCommitOrPending(
+  gitRoot: string,
+  agent: AgentId,
+  transcriptAbs: string,
+  merged: QuorumMergedConfig,
+  options: DistillPipelineOptions = {},
+): Promise<{ ok: true; filename: string } | { ok: false }> {
+  registerDistillInflight(gitRoot);
+  try {
+    return await distillCommitOrPendingBody(gitRoot, agent, transcriptAbs, merged, options);
+  } finally {
+    unregisterDistillInflight(gitRoot);
+  }
+}
+
+async function distillCommitOrPendingBody(
   gitRoot: string,
   agent: AgentId,
   transcriptAbs: string,

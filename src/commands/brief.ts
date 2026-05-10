@@ -4,6 +4,7 @@ import { assembleBrief, normalizeRepoPath } from "../brief/assemble.js";
 import { trackedDiffPathsVsHead } from "../brief/target-paths.js";
 import { loadMergedConfig } from "../config/load.js";
 import { ConfigError } from "../config/validate.js";
+import { prepareForDistilledReads, stripNoWaitFlag } from "../read-side/prepare-distilled-read.js";
 import {
   filterBriefCheckpointsActiveAtHead,
   loadBriefCheckpointsFromShadow,
@@ -44,7 +45,10 @@ function resolveTargetPathsToRepoRelative(gitRoot: string, paths: string[]): str
   });
 }
 
-export function runBrief(gitRoot: string, argv: string[]): void {
+export async function runBrief(gitRoot: string, argv: string[]): Promise<void> {
+  const { argv: briefArgv, noWait } = stripNoWaitFlag(argv);
+  await prepareForDistilledReads(gitRoot, { noWait });
+
   let merged;
   try {
     merged = loadMergedConfig(gitRoot);
@@ -58,11 +62,11 @@ export function runBrief(gitRoot: string, argv: string[]): void {
 
   let parsed: { paths: string[]; tokens?: number };
   try {
-    parsed = parseBriefArgs(argv);
+    parsed = parseBriefArgs(briefArgv);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     eprint(`quorum brief: ${msg}`);
-    eprint("  Usage: quorum brief [--tokens N] [path...]");
+    eprint("  Usage: quorum brief [--no-wait] [--tokens N] [path...]");
     process.exit(1);
   }
 

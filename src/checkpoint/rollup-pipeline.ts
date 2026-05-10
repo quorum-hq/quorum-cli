@@ -6,6 +6,7 @@ import { spawnDistillerWithTimeout } from "../distill/spawn.js";
 import { extractJsonFromEnvelope, EnvelopeParseError } from "../envelope/extract.js";
 import { maybePushShadowBranchAfterCommit } from "../git/shadow-push.js";
 import { commitCheckpointJsonOnShadowBranch } from "../git/shadow-commit.js";
+import { registerDistillInflight, unregisterDistillInflight } from "../sessions/distill-inflight.js";
 import { CheckpointValidationError } from "./session.js";
 import { parseAndNormalizeSquashRollupCheckpoint } from "./squash-rollup.js";
 
@@ -29,6 +30,23 @@ export async function distillAndCommitSquashRollup(opts: {
     throw new Error("internal error: rollup sources empty");
   }
 
+  registerDistillInflight(opts.gitRoot);
+  try {
+    return await distillAndCommitSquashRollupBody(opts);
+  } finally {
+    unregisterDistillInflight(opts.gitRoot);
+  }
+}
+
+async function distillAndCommitSquashRollupBody(opts: {
+  gitRoot: string;
+  merged: QuorumMergedConfig;
+  landingSha: string;
+  sources: string[];
+  agent: AgentId;
+  transcriptAbs: string;
+  killGraceMs?: number;
+}): Promise<{ filename: string }> {
   const timeoutMs = opts.merged.distill_cli_timeout_seconds * 1000;
   const { command, args } = resolveRollupDistillCommand(opts.agent, opts.transcriptAbs);
   const spawnRes = await spawnDistillerWithTimeout({

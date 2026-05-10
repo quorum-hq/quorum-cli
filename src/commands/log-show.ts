@@ -8,6 +8,7 @@ import { loadMergedConfig } from "../config/load.js";
 import { ConfigError } from "../config/validate.js";
 import type { RewriteManifestV1 } from "../reconcile/manifest.js";
 import { tryParseRewriteManifestJson } from "../reconcile/manifest.js";
+import { prepareForDistilledReads, stripNoWaitFlag } from "../read-side/prepare-distilled-read.js";
 import {
   listShadowJsonPaths,
   loadBriefCheckpointsFromShadow,
@@ -198,7 +199,10 @@ function resolveLogPrefixArg(_gitRoot: string, arg?: string): string | null {
   return out.length === 0 ? null : out;
 }
 
-export function runLog(gitRoot: string, argv: string[]): void {
+export async function runLog(gitRoot: string, argv: string[]): Promise<void> {
+  const { argv: logArgv, noWait } = stripNoWaitFlag(argv);
+  await prepareForDistilledReads(gitRoot, { noWait });
+
   let merged;
   try {
     merged = loadMergedConfig(gitRoot);
@@ -212,8 +216,13 @@ export function runLog(gitRoot: string, argv: string[]): void {
 
   const shadowBranch = merged.shadow_branch;
   let prefix: string | null = null;
-  if (argv[0]) {
-    prefix = resolveLogPrefixArg(gitRoot, argv[0]);
+  if (logArgv[0]) {
+    prefix = resolveLogPrefixArg(gitRoot, logArgv[0]);
+  }
+  if (logArgv.length > 1) {
+    eprint("quorum log: too many arguments (expected optional path prefix only)");
+    eprint("  Usage: quorum log [--no-wait] [path-prefix]");
+    process.exit(1);
   }
 
   let rows = loadShadowArtifacts(gitRoot, shadowBranch);

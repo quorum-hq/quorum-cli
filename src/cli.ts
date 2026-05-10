@@ -54,11 +54,11 @@ function usage(): void {
       "       quorum checkpoint --agent <id> <transcript-file>\n" +
       "       quorum retry\n" +
       "       quorum reconcile --landing <sha> [--checkpoint <id> ...] [--pr <n>] [--rollup --agent <id> --rollup-transcript <path>]\n" +
-      "       quorum brief [--tokens N] [path...]\n" +
+      "       quorum brief [--no-wait] [--tokens N] [path...]\n" +
       "       quorum pin <checkpoint-id> <decision-id>\n" +
       "       quorum unpin <checkpoint-id> <decision-id>\n" +
-      "       quorum pins\n" +
-      "       quorum log [path-prefix]\n" +
+      "       quorum pins [--no-wait]\n" +
+      "       quorum log [--no-wait] [path-prefix]\n" +
       "       quorum show [--json] <id>",
   );
 }
@@ -114,7 +114,7 @@ async function main(): Promise<void> {
         await runInternal(gitRoot, argv.slice(1));
         return;
       case "brief":
-        runBrief(gitRoot, argv.slice(1));
+        await runBrief(gitRoot, argv.slice(1));
         return;
       case "pin":
         runPin(gitRoot, argv.slice(1));
@@ -123,10 +123,10 @@ async function main(): Promise<void> {
         runUnpin(gitRoot, argv.slice(1));
         return;
       case "pins":
-        runPinsList(gitRoot);
+        await runPinsList(gitRoot, argv.slice(1));
         return;
       case "log":
-        runLog(gitRoot, argv.slice(1));
+        await runLog(gitRoot, argv.slice(1));
         process.exit(0);
       case "show":
         runShow(gitRoot, argv.slice(1));

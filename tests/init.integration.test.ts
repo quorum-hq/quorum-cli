@@ -60,7 +60,9 @@ describe("quorum init / install / disable", () => {
 
     const cfgPath = join(dir, ".quorum/config.json");
     expect(existsSync(cfgPath)).toBe(true);
-    parseAndValidateCommittedConfig(cfgPath, JSON.parse(readFileSync(cfgPath, "utf-8")));
+    const cfg0 = JSON.parse(readFileSync(cfgPath, "utf-8")) as { agents: string[] };
+    expect(cfg0.agents).toEqual(["claude-code"]);
+    parseAndValidateCommittedConfig(cfgPath, cfg0);
 
     const ign = spawnSync("git", ["check-ignore", "-q", ".quorum/local.json"], { cwd: dir, stdio: "ignore" });
     expect(ign.status).toBe(0);
@@ -134,20 +136,18 @@ describe("quorum init / install / disable", () => {
     runQuorumCapture(dir, ["init"]);
     const status = runQuorumCapture(dir, ["status"]);
     expect(status.status).toBe(0);
+    expect(status.stdout).toContain("post-rewrite: hooked");
     expect(status.stdout).toContain("claude-code: hooked");
-    expect(status.stdout).toContain("cursor: not hooked");
-    expect(status.stdout).toContain("gemini-cli: not hooked");
-    expect(status.stdout).toContain("opencode: not hooked");
-    expect(status.stdout).toContain("codex: not hooked");
+    expect(status.stdout).not.toContain("cursor:");
+    expect(status.stdout).not.toContain("gemini-cli:");
+    expect(status.stdout).not.toContain("opencode:");
+    expect(status.stdout).not.toContain("codex:");
 
     runQuorumCapture(dir, ["disable"]);
     const after = runQuorumCapture(dir, ["status"]);
     expect(after.status).toBe(0);
+    expect(after.stdout).toContain("post-rewrite: not hooked");
     expect(after.stdout).toContain("claude-code: not hooked");
-    expect(after.stdout).toContain("cursor: not hooked");
-    expect(after.stdout).toContain("gemini-cli: not hooked");
-    expect(after.stdout).toContain("opencode: not hooked");
-    expect(after.stdout).toContain("codex: not hooked");
   });
 
   it("install only wires hooks for agents enabled in config", () => {

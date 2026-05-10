@@ -32,7 +32,8 @@ export async function runCheckpoint(gitRoot: string, argv: string[]): Promise<vo
     const msg = e instanceof Error ? e.message : String(e);
     eprint(`quorum checkpoint: ${msg}`);
     eprint(
-      "  Usage: quorum checkpoint --agent <claude-code|cursor|gemini-cli|opencode> <transcript-file>",
+      "  Usage: quorum checkpoint --agent <claude-code> <transcript-file>\n" +
+        "  Other agent ids remain valid if listed in `.quorum/config.json` (experimental in v0.1; use QUORUM_DISTILL_WRAPPER for deterministic distill).",
     );
     process.exit(1);
   }
