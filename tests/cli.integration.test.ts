@@ -63,8 +63,10 @@ describe("quorum CLI", () => {
       cwd,
     });
     expect(stdout).toContain("quorum");
-    expect(stdout).toContain("quorum version");
-    expect(stdout).toContain("quorum init");
+    expect(stdout).toContain("Commands:");
+    expect(stdout).toContain("Print the installed CLI version.");
+    expect(stdout).toContain("--landing");
+    expect(stdout).toContain("--agent");
   });
 
   it("prints help on stdout and exits 0 for -h outside a git work tree", () => {
@@ -73,7 +75,8 @@ describe("quorum CLI", () => {
       encoding: "utf-8",
       cwd,
     });
-    expect(stdout).toContain("quorum version");
+    expect(stdout).toContain("Commands:");
+    expect(stdout).toContain("version");
   });
 
   it("prints help on stdout and exits 0 for help outside a git work tree", () => {
@@ -82,7 +85,8 @@ describe("quorum CLI", () => {
       encoding: "utf-8",
       cwd,
     });
-    expect(stdout).toContain("quorum version");
+    expect(stdout).toContain("Commands:");
+    expect(stdout).toContain("--no-wait");
   });
 
   it("rejects help with an extra topic with exit 1", () => {

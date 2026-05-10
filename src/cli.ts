@@ -14,6 +14,7 @@ import { runReconcile } from "./commands/reconcile.js";
 import { runLog, runShow } from "./commands/log-show.js";
 import { runRetry } from "./commands/retry.js";
 import { runStatus } from "./commands/status.js";
+import { ALLOWED_AGENT_IDS } from "./config/constants.js";
 import { ConfigError } from "./config/validate.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -43,31 +44,103 @@ function eprint(msg: string): void {
   process.stderr.write(endsWithNewline ? msg : `${msg}\n`);
 }
 
-function commandExamples(): string {
-  return (
-    "  quorum version\n" +
-    "  quorum init\n" +
-    "  quorum install\n" +
-    "  quorum disable\n" +
-    "  quorum status\n" +
-    "  quorum checkpoint --agent <id> <transcript-file>\n" +
-    "  quorum retry\n" +
-    "  quorum reconcile --landing <sha> [--checkpoint <id> ...] [--pr <n>] [--rollup --agent <id> --rollup-transcript <path>]\n" +
-    "  quorum brief [--no-wait] [--tokens N] [path...]\n" +
-    "  quorum pin <checkpoint-id> <decision-id>\n" +
-    "  quorum unpin <checkpoint-id> <decision-id>\n" +
-    "  quorum pins [--no-wait]\n" +
-    "  quorum log [--no-wait] [path-prefix]\n" +
-    "  quorum show [--json] <id>"
-  );
+type CommandHelpRow = {
+  name: string;
+  blurb: string;
+  /** Extra lines (flags, positionals); printed under the blurb, same column. */
+  detail?: readonly string[];
+};
+
+const COMMAND_HELP: readonly CommandHelpRow[] = [
+  { name: "help", blurb: "Show this list. Same as -h / --help on the bare CLI." },
+  { name: "version", blurb: "Print the installed CLI version." },
+  { name: "init", blurb: "Create `.quorum/` config, shadow branch, and git/agent hooks." },
+  { name: "install", blurb: "Install hooks when the repo already has committed Quorum config." },
+  { name: "disable", blurb: "Remove Quorum git and agent hooks (does not delete shadow data)." },
+  { name: "status", blurb: "Report whether Quorum hooks are installed." },
+  {
+    name: "checkpoint",
+    blurb: "Distill a session transcript into a checkpoint on the shadow branch.",
+    detail: [
+      "Required: --agent <id> (" + ALLOWED_AGENT_IDS.join(", ") + ").",
+      "One positional: transcript file path (after flags).",
+    ],
+  },
+  { name: "retry", blurb: "Retry distillation for the latest pending session capture." },
+  {
+    name: "reconcile",
+    blurb: "Write a rewrite manifest on the shadow branch for a landing commit; optional rollup distillation.",
+    detail: [
+      "Required: --landing <40-hex-sha>.",
+      "At least one of: --checkpoint <id> (repeatable), --pr <positive-int>.",
+      "With --rollup: also --agent <id> and --rollup-transcript <path> (" + ALLOWED_AGENT_IDS.join(", ") + ").",
+    ],
+  },
+  {
+    name: "internal",
+    blurb: "Hook entrypoints only; not for normal interactive use.",
+    detail: [
+      "Subcommands: post-rewrite (stdin), background-session-distill <git-root> <agent> <capture-path>,",
+      "claude-session-end | cursor-session-end | gemini-session-end | opencode-session-end | codex-session-end.",
+    ],
+  },
+  {
+    name: "brief",
+    blurb: "Assemble a prompt brief from distilled checkpoints for paths vs HEAD.",
+    detail: ["Optional: --no-wait, --tokens <N>. Remaining args: repo-relative paths (default: tracked diff vs HEAD)."],
+  },
+  {
+    name: "pin",
+    blurb: "Pin a decision to a checkpoint on the shadow branch.",
+    detail: ["Positionals: <checkpoint-id> <decision-id> (checkpoint id matches shadow JSON stem or record id)."],
+  },
+  {
+    name: "unpin",
+    blurb: "Remove a decision pin from a checkpoint.",
+    detail: ["Positionals: <checkpoint-id> <decision-id>."],
+  },
+  {
+    name: "pins",
+    blurb: "List checkpoints and their pinned decisions from the shadow branch.",
+    detail: ["Optional: --no-wait."],
+  },
+  {
+    name: "log",
+    blurb: "List shadow artifacts (checkpoints, manifests), optionally under a path prefix.",
+    detail: ["Optional: --no-wait, then optional path-prefix filter."],
+  },
+  {
+    name: "show",
+    blurb: "Print one shadow checkpoint or rewrite manifest.",
+    detail: [
+      "Optional: --json or -j for indented JSON.",
+      "One positional: <id> — checkpoint id, shadow filename stem, or rewrite landing SHA (40 hex; prefix match if unambiguous).",
+    ],
+  },
+];
+
+function formatCommandHelp(): string {
+  const width = COMMAND_HELP.reduce((m, r) => Math.max(m, r.name.length), 0);
+  const gap = "  ";
+  return COMMAND_HELP.map((r) => {
+    const nameCol = `${gap}${r.name.padEnd(width)}  `;
+    let block = `${nameCol}${r.blurb}`;
+    if (r.detail?.length) {
+      const indent = `${gap}${" ".repeat(width)}  `;
+      for (const line of r.detail) {
+        block += `\n${indent}${line}`;
+      }
+    }
+    return block;
+  }).join("\n");
 }
 
 function usage(): void {
-  eprint("quorum: no command given.\n" + "  Try:\n" + commandExamples());
+  eprint("quorum: no command given.\n" + "  Run `quorum --help` for commands, flags, and arguments.");
 }
 
 function printHelp(): void {
-  process.stdout.write("quorum\n\nTry:\n" + commandExamples() + "\n");
+  process.stdout.write("quorum\n\nCommands:\n" + formatCommandHelp() + "\n");
 }
 
 async function main(): Promise<void> {
@@ -154,8 +227,7 @@ async function main(): Promise<void> {
         process.exit(0);
       default:
         eprint(
-          `quorum: unknown command "${first}".\n` +
-            "  Try: quorum version | quorum init | quorum status | quorum checkpoint --agent <id> <file> | quorum retry | quorum brief | quorum log | quorum show [--json] <id>",
+          `quorum: unknown command "${first}".\n` + "  Run `quorum --help` for commands, flags, and arguments.",
         );
         process.exit(1);
     }
