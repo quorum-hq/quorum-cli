@@ -43,24 +43,31 @@ function eprint(msg: string): void {
   process.stderr.write(endsWithNewline ? msg : `${msg}\n`);
 }
 
-function usage(): void {
-  eprint(
-    "quorum: no command given.\n" +
-      "  Try: quorum version\n" +
-      "       quorum init\n" +
-      "       quorum install\n" +
-      "       quorum disable\n" +
-      "       quorum status\n" +
-      "       quorum checkpoint --agent <id> <transcript-file>\n" +
-      "       quorum retry\n" +
-      "       quorum reconcile --landing <sha> [--checkpoint <id> ...] [--pr <n>] [--rollup --agent <id> --rollup-transcript <path>]\n" +
-      "       quorum brief [--no-wait] [--tokens N] [path...]\n" +
-      "       quorum pin <checkpoint-id> <decision-id>\n" +
-      "       quorum unpin <checkpoint-id> <decision-id>\n" +
-      "       quorum pins [--no-wait]\n" +
-      "       quorum log [--no-wait] [path-prefix]\n" +
-      "       quorum show [--json] <id>",
+function commandExamples(): string {
+  return (
+    "  quorum version\n" +
+    "  quorum init\n" +
+    "  quorum install\n" +
+    "  quorum disable\n" +
+    "  quorum status\n" +
+    "  quorum checkpoint --agent <id> <transcript-file>\n" +
+    "  quorum retry\n" +
+    "  quorum reconcile --landing <sha> [--checkpoint <id> ...] [--pr <n>] [--rollup --agent <id> --rollup-transcript <path>]\n" +
+    "  quorum brief [--no-wait] [--tokens N] [path...]\n" +
+    "  quorum pin <checkpoint-id> <decision-id>\n" +
+    "  quorum unpin <checkpoint-id> <decision-id>\n" +
+    "  quorum pins [--no-wait]\n" +
+    "  quorum log [--no-wait] [path-prefix]\n" +
+    "  quorum show [--json] <id>"
   );
+}
+
+function usage(): void {
+  eprint("quorum: no command given.\n" + "  Try:\n" + commandExamples());
+}
+
+function printHelp(): void {
+  process.stdout.write("quorum\n\nTry:\n" + commandExamples() + "\n");
 }
 
 async function main(): Promise<void> {
@@ -69,6 +76,20 @@ async function main(): Promise<void> {
 
   if (first === "version") {
     process.stdout.write(`${readOwnVersion()}\n`);
+    process.exit(0);
+  }
+
+  if (first === "-h" || first === "--help") {
+    printHelp();
+    process.exit(0);
+  }
+
+  if (first === "help") {
+    if (argv.length > 1) {
+      eprint(`quorum: unknown help topic "${argv[1]}".`);
+      process.exit(1);
+    }
+    printHelp();
     process.exit(0);
   }
 

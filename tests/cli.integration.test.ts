@@ -55,4 +55,50 @@ describe("quorum CLI", () => {
     expect(err!.stderr).toContain("not inside a git working tree");
     expect(err!.stderr).toContain("git init");
   });
+
+  it("prints help on stdout and exits 0 for --help outside a git work tree", () => {
+    const cwd = nonGitCwd();
+    const stdout = execFileSync(process.execPath, [cliEntry, "--help"], {
+      encoding: "utf-8",
+      cwd,
+    });
+    expect(stdout).toContain("quorum");
+    expect(stdout).toContain("quorum version");
+    expect(stdout).toContain("quorum init");
+  });
+
+  it("prints help on stdout and exits 0 for -h outside a git work tree", () => {
+    const cwd = nonGitCwd();
+    const stdout = execFileSync(process.execPath, [cliEntry, "-h"], {
+      encoding: "utf-8",
+      cwd,
+    });
+    expect(stdout).toContain("quorum version");
+  });
+
+  it("prints help on stdout and exits 0 for help outside a git work tree", () => {
+    const cwd = nonGitCwd();
+    const stdout = execFileSync(process.execPath, [cliEntry, "help"], {
+      encoding: "utf-8",
+      cwd,
+    });
+    expect(stdout).toContain("quorum version");
+  });
+
+  it("rejects help with an extra topic with exit 1", () => {
+    const cwd = nonGitCwd();
+    let err: ExecError | undefined;
+    try {
+      execFileSync(process.execPath, [cliEntry, "help", "checkpoint"], {
+        encoding: "utf-8",
+        cwd,
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+    } catch (e) {
+      err = e as ExecError;
+    }
+    expect(err).toBeDefined();
+    expect(err!.status).toBe(1);
+    expect(err!.stderr).toContain("unknown help topic");
+  });
 });
