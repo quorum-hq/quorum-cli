@@ -87,7 +87,9 @@ const COMMAND_HELP: readonly CommandHelpRow[] = [
   {
     name: "brief",
     blurb: "Assemble a prompt brief from distilled checkpoints for paths vs HEAD.",
-    detail: ["Optional: --no-wait, --tokens <N>. Remaining args: repo-relative paths (default: tracked diff vs HEAD)."],
+    detail: [
+      "Optional: --no-wait, --tokens <N>. Remaining args: repo-relative path roots (default: tracked diff vs HEAD); a directory matches any file under that prefix (`.` is the whole repo).",
+    ],
   },
   {
     name: "pin",

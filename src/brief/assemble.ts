@@ -14,6 +14,35 @@ export function normalizeRepoPath(p: string): string {
   return s;
 }
 
+/**
+ * Normalize a user-selected path root for brief matching (prefix semantics).
+ * Repo root is represented as "." so `quorum brief .` at the git root still selects everything.
+ */
+export function normalizeBriefTargetSelection(p: string): string {
+  const s = normalizeRepoPath(p);
+  if (s.length === 0 || s === ".") {
+    return ".";
+  }
+  const trimmed = s.replace(/\/+$/, "");
+  return trimmed.length === 0 ? "." : trimmed;
+}
+
+/** Whether a normalized repo-relative file path falls under any brief target (exact or directory prefix). */
+export function fileMatchesBriefTargets(normalizedFile: string, targetSet: Set<string>): boolean {
+  if (normalizedFile.length === 0) {
+    return false;
+  }
+  for (const t of targetSet) {
+    if (t === ".") {
+      return true;
+    }
+    if (normalizedFile === t || normalizedFile.startsWith(`${t}/`)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /** Rough token estimate for budgeting (not a model tokenizer). */
 export function estimateTokens(text: string): number {
   if (text.length === 0) return 0;
@@ -29,7 +58,7 @@ export function overlapCount(filesTouched: string[], targetSet: Set<string>): nu
   let n = 0;
   for (const f of filesTouched) {
     const nrm = normalizeRepoPath(f);
-    if (nrm.length > 0 && targetSet.has(nrm)) {
+    if (nrm.length > 0 && fileMatchesBriefTargets(nrm, targetSet)) {
       n++;
     }
   }
@@ -74,7 +103,7 @@ export function assembleBrief(input: {
   /** When provided, refines the empty-checkpoint message if sessions exist on shadow but none apply to HEAD. */
   shadowSessionCount?: number;
 }): { body: string; stderrOverflow: string | null } {
-  const targetSet = new Set(input.targetPaths.map(normalizeRepoPath).filter((p) => p.length > 0));
+  const targetSet = new Set(input.targetPaths.map(normalizeBriefTargetSelection));
 
   if (input.checkpoints.length === 0) {
     if (input.shadowSessionCount !== undefined && input.shadowSessionCount > 0) {

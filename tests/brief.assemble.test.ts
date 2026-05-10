@@ -4,6 +4,7 @@ import type { SquashRollupCheckpoint } from "../src/checkpoint/squash-rollup.js"
 import {
   assembleBrief,
   estimateTokens,
+  normalizeBriefTargetSelection,
   normalizeRepoPath,
   overlapCount,
   rankScore,
@@ -298,6 +299,23 @@ describe("assembleBrief", () => {
       "
     `);
   });
+
+  it("includes checkpoints when target is a directory prefix", () => {
+    const cp = sessionCheckpoint({
+      id: "under-src",
+      created_at: "2026-05-10T12:00:00.000Z",
+      files_touched: ["src/deep/file.ts"],
+      decisions: [{ id: "d1", topic: "T", conclusion: "c", rationale: "r", canonical: false }],
+    });
+    const { body } = assembleBrief({
+      targetPaths: ["src"],
+      checkpoints: [cp],
+      nominalTokenBudget: 10_000,
+      nowMs: frozenNow,
+    });
+    expect(body).toContain("under-src");
+    expect(body).toContain("d1");
+  });
 });
 
 describe("brief helpers", () => {
@@ -307,8 +325,19 @@ describe("brief helpers", () => {
   });
 
   it("overlapCount counts intersection with normalized targets", () => {
-    const set = new Set(["a/b.ts"]);
+    const set = new Set(["a/b.ts"].map(normalizeBriefTargetSelection));
     expect(overlapCount(["./a/b.ts"], set)).toBe(1);
+  });
+
+  it("overlapCount matches files under a directory prefix", () => {
+    const set = new Set(["src"].map(normalizeBriefTargetSelection));
+    expect(overlapCount(["src/x.ts", "other/y.ts"], set)).toBe(1);
+    expect(overlapCount(["src/nested/z.ts"], set)).toBe(1);
+  });
+
+  it("overlapCount treats repo root selection as matching any file", () => {
+    const set = new Set(["."].map(normalizeBriefTargetSelection));
+    expect(overlapCount(["README.md", "pkg/a.ts"], set)).toBe(2);
   });
 
   it("estimateTokens is length-based", () => {
