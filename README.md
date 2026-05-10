@@ -1,5 +1,9 @@
 # quorum-cli
 
+[![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D20-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![Status: Beta](https://img.shields.io/badge/status-beta-orange.svg)](#beta-status)
+
 ```text
  ██████╗ ██╗   ██╗ ██████╗ ██████╗ ██╗   ██╗███╗   ███╗
 ██╔═══██╗██║   ██║██╔═══██╗██╔══██╗██║   ██║████╗ ████║
@@ -14,6 +18,8 @@
 It captures what your team already decided and carries that context forward so agents stop restarting from zero.
 
 `BETA` `OPEN SOURCE` `TEAM MEMORY`
+
+---
 
 ## Real pain points this solves
 
@@ -30,6 +36,8 @@ Quorum fixes that loop with one primitive:
 3. generate relevant briefs for the next session
 
 **Quorum tells your agent what it needs to know before it writes code.**
+
+---
 
 ## Before vs after
 
@@ -88,6 +96,8 @@ npx quorum-cli version
 ```
 
 `quorum version` reports the installed CLI artifact version (the package version you installed), so it is the canonical check for release/debug reports.
+
+---
 
 ## Quick start (automatic flow)
 
@@ -188,6 +198,8 @@ next session starts
 
 Operationally: this keeps context in git-native artifacts, not in ad-hoc chat history.
 
+---
+
 ## Command reference (v0.1)
 
 Use `quorum --help` for full syntax and flags. The core command surface:
@@ -234,6 +246,8 @@ Use `quorum --help` for full syntax and flags. The core command surface:
 
 Broader first-class agent support is planned in future versions.
 
+---
+
 ## Docs and examples
 
 - [Architecture deep dive (shadow branch, capture/retrieval, reconcile)](docs/examples/architecture.md)
@@ -248,12 +262,23 @@ Broader first-class agent support is planned in future versions.
 
 Full vision: [quorum-hq.github.io](https://quorum-hq.github.io)
 
+---
+
 ## Homebrew status
 
 Homebrew distribution is planned but not published yet.
 
 - Current install path: `npm install -g quorum-cli`
 - Future path: official tap/formula docs will be added here when released
+
+---
+
+## Contact
+
+- Email: [kachhwalvansh230@gmail.com](mailto:kachhwalvansh230@gmail.com)
+- LinkedIn: [linkedin.com/in/kachhwalvansh](https://www.linkedin.com/in/kachhwalvansh/)
+
+---
 
 ## Beta status
 
