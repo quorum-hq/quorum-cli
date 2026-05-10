@@ -1,6 +1,7 @@
 /.mvp_docs/
 /.scratch/
 docs/agents/
+AGENTS.md
 node_modules/
 dist/
 
